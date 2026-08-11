@@ -1,0 +1,105 @@
+{
+  "partners": [
+    {
+      "store_id": "1",
+      "store_name": "Mama Cass Kitchen",
+      "said": "482103",
+      "am_email": "adaeze.okonkwo@glovo.ng",
+      "segment": "Tier 3",
+      "orders_delivered": 18,
+      "campaign_start_date": "2026-07-01"
+    },
+    {
+      "store_id": "2",
+      "store_name": "Ola's Pharmacy",
+      "said": "560221",
+      "am_email": "chidi.eze@glovo.ng",
+      "segment": "Tier 4",
+      "orders_delivered": 2,
+      "campaign_start_date": "2026-07-01"
+    },
+    {
+      "store_id": "3",
+      "store_name": "Kada Chinese",
+      "said": "701845",
+      "am_email": "nkechi.adeyemi@glovo.ng",
+      "segment": "Tier 2",
+      "orders_delivered": 42,
+      "campaign_start_date": "2026-07-01"
+    },
+    {
+      "store_id": "4",
+      "store_name": "Suya Spot",
+      "said": "339910",
+      "am_email": "emeka.okafor@glovo.ng",
+      "segment": "Tier 4",
+      "orders_delivered": 6,
+      "campaign_start_date": "2026-07-01"
+    },
+    {
+      "store_id": "5",
+      "store_name": "Lagos Suya House",
+      "said": "204471",
+      "am_email": "adaeze.okonkwo@glovo.ng",
+      "segment": "Tier 2",
+      "orders_delivered": 0,
+      "campaign_start_date": "2026-07-01"
+    }
+  ],
+  "ams": [
+    {
+      "am_name": "Adaeze Okonkwo",
+      "am_email": "adaeze.okonkwo@glovo.ng"
+    },
+    {
+      "am_name": "Chidi Eze",
+      "am_email": "chidi.eze@glovo.ng"
+    },
+    {
+      "am_name": "Nkechi Adeyemi",
+      "am_email": "nkechi.adeyemi@glovo.ng"
+    },
+    {
+      "am_name": "Emeka Okafor",
+      "am_email": "emeka.okafor@glovo.ng"
+    },
+    {
+      "am_name": "Fatima Bello",
+      "am_email": "fatima.bello@glovo.ng"
+    },
+    {
+      "am_name": "Kunle Adewale",
+      "am_email": "kunle.adewale@glovo.ng"
+    },
+    {
+      "am_name": "Yemi Olatunji",
+      "am_email": "yemi.olatunji@glovo.ng"
+    },
+    {
+      "am_name": "Blessing Okoro",
+      "am_email": "blessing.okoro@glovo.ng"
+    },
+    {
+      "am_name": "Tunde Fashola",
+      "am_email": "tunde.fashola@glovo.ng"
+    },
+    {
+      "am_name": "Amaka Igwe",
+      "am_email": "amaka.igwe@glovo.ng"
+    }
+  ],
+  "spinLog": [
+    {
+      "said": "482103",
+      "wheel_tier": "Zenith",
+      "prize": "₦10K Credit",
+      "timestamp": "2026-08-08T13:38:26.025Z"
+    },
+    {
+      "said": "701845",
+      "wheel_tier": "Jackpot",
+      "prize": "₦10K Credit",
+      "timestamp": "2026-08-09T15:29:50.891Z"
+    }
+  ]
+}

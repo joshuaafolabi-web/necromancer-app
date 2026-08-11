@@ -1,0 +1,12 @@
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: #F5F5F7;
+  color: #1D1D1F;
+}
+a { color: #00A082; text-decoration: none; }
+a:hover { color: #007a63; }
+select, input, button { font-family: inherit; }
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+* { box-sizing: border-box; }
