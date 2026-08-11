@@ -3,7 +3,7 @@
     {
       "store_id": "1",
       "store_name": "Mama Cass Kitchen",
-      "said": "482103",
+      "said": "112233",
       "am_email": "adaeze.okonkwo@glovo.ng",
       "segment": "Tier 3",
       "orders_delivered": 18,
@@ -12,7 +12,7 @@
     {
       "store_id": "2",
       "store_name": "Ola's Pharmacy",
-      "said": "560221",
+      "said": "223344",
       "am_email": "chidi.eze@glovo.ng",
       "segment": "Tier 4",
       "orders_delivered": 2,
@@ -21,7 +21,7 @@
     {
       "store_id": "3",
       "store_name": "Kada Chinese",
-      "said": "701845",
+      "said": "334455",
       "am_email": "nkechi.adeyemi@glovo.ng",
       "segment": "Tier 2",
       "orders_delivered": 42,
@@ -30,7 +30,7 @@
     {
       "store_id": "4",
       "store_name": "Suya Spot",
-      "said": "339910",
+      "said": "445566",
       "am_email": "emeka.okafor@glovo.ng",
       "segment": "Tier 4",
       "orders_delivered": 6,
@@ -39,7 +39,7 @@
     {
       "store_id": "5",
       "store_name": "Lagos Suya House",
-      "said": "204471",
+      "said": "556677",
       "am_email": "adaeze.okonkwo@glovo.ng",
       "segment": "Tier 2",
       "orders_delivered": 0,
@@ -90,13 +90,13 @@
   ],
   "spinLog": [
     {
-      "said": "482103",
+      "said": "112233",
       "wheel_tier": "Zenith",
       "prize": "₦10K Credit",
       "timestamp": "2026-08-08T13:38:26.025Z"
     },
     {
-      "said": "701845",
+      "said": "334455",
       "wheel_tier": "Jackpot",
       "prize": "₦10K Credit",
       "timestamp": "2026-08-09T15:29:50.891Z"

@@ -202,8 +202,7 @@ cp .env.example .env.local     # edit if you already have Sheet credentials
 npm run dev                     # http://localhost:3000/arcade
 ```
 
-Sample SAIDs to log in with in local mode: `482103`, `560221`, `701845`,
-`339910`, `204471`. Visit `/clash` for the AM side; use the dropdown to
+Sample SAIDs to log in with in local mode are defined in `data/partners.local.json`. Visit `/clash` for the AM side; use the dropdown to
 switch which AM you're viewing as.
 
 **First real task once you have the shortlist file**: convert it to the

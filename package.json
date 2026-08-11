@@ -14,6 +14,7 @@
     "googleapis": "^140.0.1"
   },
   "devDependencies": {
+    "@netlify/plugin-nextjs": "^7.0.0",
     "typescript": "^5.5.4",
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.3"

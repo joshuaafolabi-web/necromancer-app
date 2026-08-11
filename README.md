@@ -49,11 +49,29 @@ branches on `SHEETS_MODE`.
 
 2. Paste in your shortlisted 100 stores under Partners, and your 10 AMs
    under AMs.
+
+### Recommended: use a Google Apps Script proxy (no service account needed)
+
+3. Go to https://script.google.com and create a new Apps Script project.
+4. Copy `apps_script_Code.gs` from this repo into the project, then edit the
+   `API_KEY` constant to a strong secret.
+5. Deploy the script as a Web App:
+   - Execute as: Me
+   - Who has access: Anyone
+6. Copy the resulting Web App URL and set these environment variables in
+   Netlify:
+   ```
+   SHEETS_MODE=live
+   APPS_SCRIPT_BASE_URL=<the Apps Script URL>
+   APPS_SCRIPT_API_KEY=<the same API key from Code.gs>
+   ```
+
+### Alternative: direct Sheets API via service account
+
 3. Google Cloud Console → create a service account → generate a JSON key.
 4. Share the Sheet with the service account's email (found in the JSON
-   key) as an **Editor** — same as sharing with any other Google account.
-5. Set environment variables (locally in `.env.local`, or in Vercel's
-   project settings):
+   key) as an **Editor**.
+5. Set environment variables in Netlify:
    ```
    SHEETS_MODE=live
    GOOGLE_SHEETS_ID=<the id from the sheet's URL>
@@ -68,19 +86,42 @@ npm install
 npm run dev
 ```
 
-Visit `http://localhost:3000/arcade` — log in with `482103`, `560221`,
-`701845`, `339910`, or `204471` (the sample partners in local mode).
+Visit `http://localhost:3000/arcade` — log in using any valid SAID from your live sheet or the local sample data in `data/partners.local.json`.
 Visit `/clash` for the AM side.
 
-## Deploy to Vercel
+## Deploy to Netlify
+
+1. Connect the GitHub repository to Netlify.
+2. Set the build command to:
 
 ```bash
-vercel deploy
+npm run build
 ```
 
-Set the four env vars above in the Vercel project settings before your
-first `live`-mode deploy. `local` mode needs no env vars at all — you can
-deploy and demo it today.
+3. Set the publish directory to:
+
+```
+.next
+```
+
+4. Set the environment variables in the Netlify site settings:
+
+```bash
+SHEETS_MODE=live
+APPS_SCRIPT_BASE_URL=<the Apps Script URL>
+APPS_SCRIPT_API_KEY=<the Apps Script secret>
+```
+
+If you are using the direct Sheets API service account approach instead, set:
+
+```bash
+SHEETS_MODE=live
+GOOGLE_SHEETS_ID=<the id from the sheet's URL>
+GOOGLE_SERVICE_ACCOUNT_EMAIL=<from the JSON key>
+GOOGLE_SERVICE_ACCOUNT_KEY=<the private_key field from the JSON key, keep the \n escapes>
+```
+
+`local` mode needs no env vars at all — you can deploy and demo it on Netlify today.
 
 ## What's real vs. simplified right now
 
