@@ -2,6 +2,10 @@
   command = "npm run build"
   publish = ".next"
 
+# Netlify installs and versions this itself from its plugin registry. It must
+# NOT also be an npm devDependency: package.json pinned ^6.0.0, which has
+# never existed (latest is 5.x), so npm install failed with ETARGET the
+# moment there was no lockfile to resolve from.
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
