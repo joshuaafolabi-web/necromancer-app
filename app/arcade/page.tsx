@@ -2,21 +2,21 @@
 import { useState } from 'react';
 import TopNav from '@/components/TopNav';
 import Wheel from '@/components/Wheel';
-import { CREDIT_STEPS, PRIZES } from '@/lib/scoring';
+import RewardGallery from '@/components/RewardGallery';
 
+// The ladder rungs and prize labels now arrive with the lookup response
+// rather than being declared here, so this page can't disagree with the
+// backend about the rules. amEmail is no longer returned at all — anyone can
+// try 6-digit SAIDs, and a lucky guess shouldn't hand back a staff email.
 type LookupResponse = {
-  partner: { storeName: string; said: string; amEmail: string; segment: string; ordersDelivered: number };
+  partner: { storeName: string; said: string; segment: string; ordersDelivered: number };
   ladder: { currentLabel: string; currentCredit: number; nextLabel: string | null; ordersToNext: number | null; progressPct: number; stepIndex: number };
   wheel: { locked: boolean; tierName: string | null; ordersToUnlockFirst: number | null; ordersToJackpot: number; spinAvailable: boolean };
+  credit: { lifetimeEarned: number; cap: number | null; atCap: boolean };
+  challenge: { accepted: boolean; acceptedAt: string | null; dayNumber: number | null; daysLeft: number | null; expired?: boolean };
+  prizeLabels: string[];
+  creditSteps: { orders: number; label: string }[];
 };
-
-const rewardGallery = [
-  { title: 'Free Packaging', image: 'https://images.unsplash.com/photo-1517705008128-361805f42e86?auto=format&fit=crop&w=900&q=80' },
-  { title: 'Store Branding', image: 'https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=900&q=80' },
-  { title: 'Food Photography Session', image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=900&q=80' },
-  { title: 'Instagram Story Feature', image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=900&q=80' },
-  { title: 'Ads Credit', image: 'https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=900&q=80' },
-];
 
 export default function ArcadePage() {
   const [said, setSaid] = useState('');
@@ -25,6 +25,41 @@ export default function ArcadePage() {
   const [spinning, setSpinning] = useState(false);
   const [wonPrize, setWonPrize] = useState<string | null>(null);
   const [rotation, setRotation] = useState(0);
+  const [accepting, setAccepting] = useState(false);
+  const [acceptNote, setAcceptNote] = useState('');
+
+  async function acceptChallenge() {
+    if (!data || accepting) return;
+    setAccepting(true);
+    setAcceptNote('');
+    try {
+      const res = await fetch('/api/partner/accept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ said: data.partner.said }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        setAcceptNote(result.error || 'That did not go through. Please try again.');
+        return;
+      }
+      setData((d) => (d ? { ...d, challenge: result.challenge } : d));
+      // A mail failure still counts as accepted — the clock has started and
+      // it's recorded, so don't tell the partner it failed. Ops chases the
+      // notification separately.
+      setAcceptNote(
+        result.alreadyAccepted
+          ? 'You had already accepted — your challenge is running.'
+          : result.notified
+            ? 'You are in. Your Account Manager has been notified.'
+            : 'You are in. Your Account Manager will be in touch shortly.'
+      );
+    } catch {
+      setAcceptNote('Connection problem. Please try again.');
+    } finally {
+      setAccepting(false);
+    }
+  }
 
   async function login() {
     const normalizedSaid = said.trim();
@@ -34,41 +69,67 @@ export default function ArcadePage() {
     }
 
     setError('');
-    const res = await fetch(`/api/partner/lookup?said=${encodeURIComponent(normalizedSaid)}`);
-    if (!res.ok) {
-      setError('We could not find that Store Address ID (SAID). Please enter a valid SAID and try again.');
-      return;
+    try {
+      const res = await fetch(`/api/partner/lookup?said=${encodeURIComponent(normalizedSaid)}`);
+      const body = await res.json();
+      if (!res.ok) {
+        // A 502 means the backend is misconfigured, not that the SAID is
+        // wrong — telling a partner "SAID not found" in that case sends
+        // them to their AM to fix something that isn't broken.
+        setError(
+          res.status === 404
+            ? 'We could not find that Store Address ID (SAID). Please check it with your Account Manager.'
+            : body.error || 'Something went wrong. Please try again.'
+        );
+        return;
+      }
+      setData(body);
+      setWonPrize(null);
+    } catch {
+      setError('Connection problem. Check your internet and try again.');
     }
-    setData(await res.json());
-    setWonPrize(null);
   }
 
   async function spin() {
-    if (!data) return;
+    if (!data || spinning) return;
     setSpinning(true);
     setWonPrize(null);
-    const res = await fetch('/api/partner/spin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ said: data.partner.said }),
-    });
-    const result = await res.json();
-    if (!res.ok) { setSpinning(false); setError(result.error); return; }
+    setError('');
 
-    const total = PRIZES.reduce((s, p) => s + p.weight, 0);
-    let acc = 0;
-    for (let i = 0; i < result.prizeIndex; i++) acc += PRIZES[i].weight;
-    const wedgeStartDeg = (acc / total) * 360;
-    const wedgeSizeDeg = (PRIZES[result.prizeIndex].weight / total) * 360;
-    const landDeg = wedgeStartDeg + wedgeSizeDeg / 2;
-    const spins = 5 * 360;
-    setRotation((r) => r + spins + (360 - landDeg) - (r % 360));
+    try {
+      const res = await fetch('/api/partner/spin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ said: data.partner.said }),
+      });
+      const result = await res.json();
 
-    setTimeout(() => {
+      if (!res.ok) {
+        setSpinning(false);
+        if (res.status === 409) {
+          setError('You have already spun this wheel. Keep ordering to unlock the next one.');
+          setData({ ...data, wheel: { ...data.wheel, spinAvailable: false } });
+        } else {
+          setError(result.error || 'That did not go through. Please try again.');
+        }
+        return;
+      }
+
+      // Equal wedges, so landing is pure geometry off the index the server
+      // chose — the client has no weights to reason about.
+      const step = 360 / data.prizeLabels.length;
+      const landDeg = result.prizeIndex * step + step / 2;
+      setRotation((r) => r + 5 * 360 + (360 - landDeg) - (r % 360));
+
+      setTimeout(() => {
+        setSpinning(false);
+        setWonPrize(result.prizeLabel);
+        setData((d) => (d ? { ...d, wheel: { ...d.wheel, spinAvailable: false } } : d));
+      }, 3200);
+    } catch {
       setSpinning(false);
-      setWonPrize(result.prizeLabel);
-      setData({ ...data, wheel: { ...data.wheel, spinAvailable: false } });
-    }, 3200);
+      setError('Could not reach the server. Your spin was NOT used — please try again.');
+    }
   }
 
   if (!data) {
@@ -85,14 +146,7 @@ export default function ArcadePage() {
               <p style={{ fontSize: 15, lineHeight: 1.7, color: '#5A5A63', margin: '0 0 24px' }}>
                 Check your Ads Credit ladder, unlock the spin wheel, and discover the rewards your store can win.
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14 }}>
-                {rewardGallery.map((item) => (
-                  <div key={item.title} style={{ borderRadius: 18, overflow: 'hidden', background: '#FAFAFA', border: '1px solid rgba(0,0,0,0.05)' }}>
-                    <img src={item.image} alt={item.title} style={{ width: '100%', height: 120, objectFit: 'cover', display: 'block' }} />
-                    <div style={{ padding: '10px 12px', fontSize: 12.5, fontWeight: 700, color: '#1D1D1F' }}>{item.title}</div>
-                  </div>
-                ))}
-              </div>
+              <RewardGallery columns={2} />
             </div>
 
             <div style={{ background: '#fff', borderRadius: 28, padding: '28px 24px', boxShadow: '0 24px 60px rgba(0,0,0,0.08)', height: 'fit-content' }}>
@@ -120,7 +174,7 @@ export default function ArcadePage() {
     );
   }
 
-  const { partner, ladder, wheel } = data;
+  const { partner, ladder, wheel, credit, prizeLabels, creditSteps, challenge } = data;
 
   return (
     <div style={{ minHeight: '100vh', background: '#F5F5F7' }}>
@@ -137,6 +191,51 @@ export default function ArcadePage() {
         <div style={{ padding: '18px 18px 4px' }}>
           <div style={{ fontSize: 10.5, fontWeight: 600, color: '#8E8E93', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'JetBrains Mono, monospace' }}>Reactivation Arcade</div>
           <h1 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, fontSize: 21, margin: '2px 0 0', color: '#1D1D1F' }}>{partner.storeName}</h1>
+        </div>
+
+        {/* 30-day challenge. Accepting lives here rather than on the landing
+            page because it needs a SAID to know which store accepted and
+            which Account Manager to email. */}
+        <div style={{ margin: '14px 18px 0' }}>
+          {challenge.accepted ? (
+            <div style={{ borderRadius: 16, padding: '14px 16px', background: '#fff', border: '1px solid rgba(0,160,130,0.22)', boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 12.5, fontWeight: 800, color: '#00786A' }}>
+                    {challenge.expired ? 'Challenge complete' : `Day ${challenge.dayNumber} of 30`}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#8E8E93', marginTop: 2 }}>
+                    {challenge.expired
+                      ? 'Your 30 days are up — your Account Manager will be in touch.'
+                      : `${challenge.daysLeft} day${challenge.daysLeft === 1 ? '' : 's'} left to climb the ladder`}
+                  </div>
+                </div>
+                <div style={{ fontSize: 22 }}>{challenge.expired ? '🏁' : '🔥'}</div>
+              </div>
+              {!challenge.expired && (
+                <div style={{ height: 6, borderRadius: 3, background: '#F0F0F2', marginTop: 10 }}>
+                  <div style={{ width: `${((challenge.dayNumber ?? 0) / 30) * 100}%`, height: '100%', borderRadius: 3, background: '#00A082' }} />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ borderRadius: 16, padding: '16px', background: '#1D1D1F', boxShadow: '0 8px 24px rgba(0,0,0,0.14)' }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>Accept the 30-day challenge</div>
+              <div style={{ fontSize: 11.5, lineHeight: 1.6, color: 'rgba(255,255,255,0.65)', margin: '5px 0 14px' }}>
+                Start your 30 days and we will let your Account Manager know you are in.
+              </div>
+              <button
+                onClick={acceptChallenge}
+                disabled={accepting}
+                style={{ width: '100%', border: 'none', borderRadius: 999, padding: 13, fontSize: 13.5, fontWeight: 800, cursor: accepting ? 'default' : 'pointer', background: accepting ? '#4B5563' : '#FFC244', color: accepting ? '#9CA3AF' : '#1D1D1F' }}
+              >
+                {accepting ? 'Sending…' : 'I’m in — notify my Account Manager'}
+              </button>
+            </div>
+          )}
+          {acceptNote && (
+            <div style={{ fontSize: 11.5, color: '#00786A', marginTop: 8, textAlign: 'center', lineHeight: 1.5 }}>{acceptNote}</div>
+          )}
         </div>
 
         <div style={{ margin: '14px 18px 16px' }}>
@@ -162,9 +261,9 @@ export default function ArcadePage() {
           <div style={{ fontSize: 10.5, fontWeight: 600, color: '#8E8E93', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'JetBrains Mono, monospace', marginBottom: 20 }}>Credit Ladder</div>
           <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between' }}>
             <div style={{ position: 'absolute', left: 11, right: 11, top: 11, height: 1, background: '#F0F0F2' }}>
-              <div style={{ width: `${(ladder.stepIndex / (CREDIT_STEPS.length - 1)) * 100}%`, height: '100%', background: '#00A082' }} />
+              <div style={{ width: `${(ladder.stepIndex / (creditSteps.length - 1)) * 100}%`, height: '100%', background: '#00A082' }} />
             </div>
-            {CREDIT_STEPS.map((step, i) => {
+            {creditSteps.map((step, i) => {
               const reached = step.orders <= partner.ordersDelivered;
               const current = i === ladder.stepIndex;
               return (
@@ -183,14 +282,17 @@ export default function ArcadePage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 14, color: '#1D1D1F' }}>{wheel.tierName ?? 'Locked'} Wheel</div>
-              <div style={{ fontSize: 11, color: '#8E8E93', marginTop: 2 }}>{partner.ordersDelivered} orders · {wheel.locked ? 'wheel locked' : wheel.spinAvailable ? '1 spin available' : 'spin used'}</div>
+              <div style={{ fontSize: 11, color: '#8E8E93', marginTop: 2 }}>
+                {partner.ordersDelivered} orders · {wheel.locked ? 'wheel locked' : wheel.spinAvailable ? '1 spin available' : 'spin used'}
+                {credit.atCap && ' · ₦25K credit cap reached, prizes only'}
+              </div>
             </div>
             <div style={{ background: '#FFFBEC', border: '1px solid rgba(255,194,68,0.3)', borderRadius: 8, padding: '5px 10px', fontSize: 10, fontWeight: 700, color: '#B8860B', whiteSpace: 'nowrap' }}>
               {wheel.locked ? `${wheel.ordersToUnlockFirst} to unlock` : wheel.ordersToJackpot > 0 ? `${wheel.ordersToJackpot} to Jackpot` : 'Jackpot unlocked'}
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
-            <Wheel rotationDeg={rotation} locked={wheel.locked} />
+            <Wheel rotationDeg={rotation} locked={wheel.locked} labels={prizeLabels} />
             {wheel.spinAvailable && !wonPrize && (
               <button onClick={spin} disabled={spinning} style={{ padding: '13px 40px', borderRadius: 999, border: 'none', fontSize: 13, fontWeight: 700, letterSpacing: '0.02em', cursor: spinning ? 'default' : 'pointer', background: spinning ? '#E5E7EB' : '#FFC244', color: spinning ? '#9CA3AF' : '#1D1D1F', boxShadow: spinning ? 'none' : '0 4px 16px rgba(255,194,68,0.4)' }}>
                 {spinning ? 'Spinning…' : 'Spin Now'}
@@ -202,6 +304,12 @@ export default function ArcadePage() {
                 <div style={{ fontSize: 17, fontWeight: 800, color: '#B8860B', marginTop: 2 }}>{wonPrize}</div>
                 <div style={{ fontSize: 11, color: '#8E8E93', marginTop: 3 }}>Your AM will reach out within 48 hours</div>
               </div>
+            )}
+            {/* Spin failures were previously written to `error`, which only
+                the logged-out login card rendered — so a failed spin looked
+                like a dead button with no explanation. */}
+            {error && (
+              <div style={{ fontSize: 12, color: '#DC2626', textAlign: 'center', lineHeight: 1.4 }}>{error}</div>
             )}
           </div>
         </div>

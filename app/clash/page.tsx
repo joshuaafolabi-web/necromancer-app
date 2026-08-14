@@ -6,9 +6,15 @@ import TopNav from '@/components/TopNav';
 type ClashData = {
   leaderboard: { amName: string; amEmail: string; ep: number; reactivations: number; rank: string }[];
   self: { amName: string; amEmail: string; ep: number; reactivations: number; rank: string };
-  duel: { rival: { amName: string; ep: number; rank: string }; selfPct: number; rivalPct: number; selfLeading: boolean };
-  coven: { mate: string; rivalA: string; rivalB: string; boss: { name: string; segmentLabel: string; progressPct: number } | null; rivalProgressPct: number };
+  // rival is nullable: the round-robin pairing gives one AM a bye on an odd
+  // roster rather than inventing a phantom opponent.
+  duel: { rival: { amName: string; ep: number; rank: string } | null; selfPct: number; rivalPct: number; selfLeading: boolean; weekStart: string };
+  // rivalA/rivalB became rivalNames[] for the same reason — a coven can end
+  // up with one member, which two fixed fields couldn't represent.
+  coven: { mate: string | null; rivalNames: string[]; boss: { name: string; segmentLabel: string; progressPct: number } | null; rivalProgressPct: number };
   quest: { text: string; progress: number; target: number; complete: boolean };
+  ams?: { am_name: string; am_email: string }[];
+  error?: string;
 };
 
 const RANK_COLOR: Record<string, string> = {
@@ -29,9 +35,16 @@ export default function ClashPage() {
 
   useEffect(() => {
     if (!authorized) return;
-    fetch(`/api/necroclash${selectedAm ? `?am=${selectedAm}` : ''}`)
+    fetch(`/api/necroclash${selectedAm ? `?am=${encodeURIComponent(selectedAm)}` : ''}`)
       .then((r) => r.json())
-      .then((d) => { setData(d); if (!selectedAm) setSelectedAm(d.self.amEmail); });
+      .then((d) => {
+        setData(d);
+        // Guard the self lookup: an error payload has no `self`, and
+        // reading .amEmail off it threw an unhandled TypeError that blanked
+        // the page with nothing in the UI to explain why.
+        if (!selectedAm && d && d.self) setSelectedAm(d.self.amEmail);
+      })
+      .catch(() => setData({ error: 'Could not load NECROCLASH.' } as ClashData));
   }, [authorized, selectedAm]);
 
   if (!authorized) {
@@ -57,6 +70,17 @@ export default function ClashPage() {
   }
 
   if (!data) return <div style={{ minHeight: '100vh', background: '#F5F5F7' }}><TopNav /></div>;
+
+  if (data.error || !data.self) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#F5F5F7' }}>
+        <TopNav />
+        <div style={{ maxWidth: 560, margin: '0 auto', padding: '64px 20px', textAlign: 'center', color: '#8E8E93', fontSize: 14, lineHeight: 1.7 }}>
+          {data.error || 'NECROCLASH returned no data. Check the AMs tab is populated.'}
+        </div>
+      </div>
+    );
+  }
 
   const { leaderboard, self, duel, coven, quest } = data;
 
@@ -90,18 +114,26 @@ export default function ClashPage() {
                     <div style={{ width: `${duel.selfPct}%`, height: '100%', borderRadius: 4, background: '#FFC244' }} />
                   </div>
                   <div style={{ marginTop: 10, padding: 7, borderRadius: 10, background: '#F8F8F8', fontSize: 11, fontWeight: 600, color: '#8E8E93' }}>
-                    {duel.selfLeading ? 'Leading ↑' : `Trailing by ${duel.rivalPct - duel.selfPct}%`}
+                    {duel.selfLeading ? 'Leading ↑' : `Trailing by ${Math.max(duel.rivalPct - duel.selfPct, 0)}%`}
                   </div>
                 </div>
                 <div style={{ background: '#fff', borderRadius: 18, padding: 16, boxShadow: '-14px 8px 32px rgba(0,0,0,0.08)' }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: RANK_COLOR[duel.rival.rank] }}>{duel.rival.amName}</div>
-                  <div style={{ fontSize: 10, color: '#8E8E93', marginTop: 2 }}>{duel.rival.rank}</div>
-                  <div style={{ height: 7, borderRadius: 4, background: '#F0F0F2', marginTop: 10 }}>
-                    <div style={{ width: `${duel.rivalPct}%`, height: '100%', borderRadius: 4, background: '#B0B0B5' }} />
-                  </div>
-                  <div style={{ marginTop: 10, padding: 7, borderRadius: 10, background: '#F8F8F8', fontSize: 11, fontWeight: 600, color: '#8E8E93' }}>
-                    {!duel.selfLeading ? 'Leading ↑' : `Trailing by ${duel.selfPct - duel.rivalPct}%`}
-                  </div>
+                  {duel.rival ? (
+                    <>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: RANK_COLOR[duel.rival.rank] }}>{duel.rival.amName}</div>
+                      <div style={{ fontSize: 10, color: '#8E8E93', marginTop: 2 }}>{duel.rival.rank}</div>
+                      <div style={{ height: 7, borderRadius: 4, background: '#F0F0F2', marginTop: 10 }}>
+                        <div style={{ width: `${duel.rivalPct}%`, height: '100%', borderRadius: 4, background: '#B0B0B5' }} />
+                      </div>
+                      <div style={{ marginTop: 10, padding: 7, borderRadius: 10, background: '#F8F8F8', fontSize: 11, fontWeight: 600, color: '#8E8E93' }}>
+                        {!duel.selfLeading ? 'Leading ↑' : `Trailing by ${Math.max(duel.selfPct - duel.rivalPct, 0)}%`}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 12, color: '#8E8E93', lineHeight: 1.6 }}>
+                      Bye this week — the AM roster has an odd number of managers.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -130,7 +162,7 @@ export default function ClashPage() {
                 )}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <div style={{ borderRadius: 14, padding: 14, background: '#F0FDF9', border: '1.5px solid rgba(0,160,130,0.2)' }}>
-                    <div style={{ fontSize: 10.5, fontWeight: 700, color: '#00A082', marginBottom: 10 }}>Your Coven — with {coven.mate}</div>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, color: '#00A082', marginBottom: 10 }}>Your Coven{coven.mate ? ` — with ${coven.mate}` : ' (solo this week)'}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#00A082', marginBottom: 5 }}>
                       <span>Progress</span><span style={{ fontWeight: 700 }}>{coven.boss?.progressPct ?? 0}%</span>
                     </div>
@@ -139,7 +171,7 @@ export default function ClashPage() {
                     </div>
                   </div>
                   <div style={{ borderRadius: 14, padding: 14, background: '#FAFAFA', border: '1px solid rgba(0,0,0,0.05)' }}>
-                    <div style={{ fontSize: 10.5, fontWeight: 700, color: '#8E8E93', marginBottom: 10 }}>Rival — {coven.rivalA} & {coven.rivalB}</div>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, color: '#8E8E93', marginBottom: 10 }}>Rival — {coven.rivalNames.length ? coven.rivalNames.join(' & ') : 'none this week'}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#8E8E93', marginBottom: 5 }}>
                       <span>Progress</span><span style={{ fontWeight: 700 }}>{coven.rivalProgressPct}%</span>
                     </div>

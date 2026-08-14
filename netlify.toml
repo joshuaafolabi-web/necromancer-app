@@ -5,5 +5,22 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-[context.production.environment]
-  SHEETS_MODE = "live"
+# SHEETS_MODE is gone. It selected between a local demo-JSON reader, a
+# googleapis service-account client, and an Apps Script proxy — and it was
+# scoped to [context.production.environment], so every branch deploy and
+# deploy preview silently fell back to the default "local" mode and served
+# the five demo SAIDs in data/partners.local.json. That is why a real SAID
+# came back "not found" while the Apps Script endpoint returned it fine.
+#
+# There is one data path now, so there is no mode to get wrong. Set this in
+# the Netlify UI (Site configuration > Environment variables) — it is a
+# secret and does not belong in a committed file:
+#
+#   SYNC_API_KEY   shared secret for /api/sync/*, matching the Apps Script
+#                  script property of the same name. This is the ONLY
+#                  variable the Arcade needs.
+#
+# Optional, only if you also want the Netlify /clash page (AMs should
+# normally use the domain-restricted Apps Script dashboard instead):
+#   NECROCLASH_API_URL
+#   NECROCLASH_API_KEY

@@ -1,101 +1,44 @@
 // app/api/necroclash/route.ts
 //
-// Everything here is DERIVED live from the Partners tab + a static AM
-// roster — there's no separate am_matches/coven_raids table yet (that's a
-// Phase 2 item from the PRD). Soul Duel and Coven Clash pairings are
-// deterministic (adjacent AMs by current EP rank), which is fine for a
-// pilot but should move to a real weekly-assignment table once this proves
-// out — swap the pairing functions below for a table read at that point.
-
+// Proxies to the NECROCLASH Apps Script, which owns the leaderboard, the
+// weekly Soul Duel / Coven Clash pairings, and the quest.
+//
+// This route used to compute all of that itself, and the pairing logic was
+// wrong: each AM was matched against whoever sat one rank below them on a
+// live leaderboard, so rank 2's opponent was rank 3 while rank 2 was itself
+// rank 1's opponent. No two AMs agreed on who they were duelling, and every
+// delivered order reshuffled it mid-week. The Apps Script version uses a
+// round-robin rotation over a fixed ordering, which is symmetric and holds
+// for the week.
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllPartners, getAllAMs } from '@/lib/sheets';
-import { epForPartner, rankForEp, ladderInfo } from '@/lib/scoring';
+import { necroclashData, necroclashAms } from '@/lib/appsScript';
 
-async function buildLeaderboard() {
-  const [partners, ams] = await Promise.all([getAllPartners(), getAllAMs()]);
-
-  const rows = ams.map((am) => {
-    const mine = partners.filter((p) => p.am_email === am.am_email);
-    const totalEp = mine.reduce((s, p) => s + epForPartner(p.segment, Number(p.orders_delivered)), 0);
-    const reactivations = mine.filter((p) => ladderInfo(Number(p.orders_delivered)).cur.credit > 0).length;
-    return {
-      amName: am.am_name,
-      amEmail: am.am_email,
-      ep: Math.round(totalEp),
-      reactivations,
-      partnerCount: mine.length,
-      rank: rankForEp(totalEp),
-    };
-  });
-
-  return rows.sort((a, b) => b.ep - a.ep);
-}
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  const selfEmail = req.nextUrl.searchParams.get('am') || '';
-  const leaderboard = await buildLeaderboard();
+  const amEmail = req.nextUrl.searchParams.get('am') || '';
 
-  const selfIdx = leaderboard.findIndex((r) => r.amEmail === selfEmail);
-  const self = selfIdx >= 0 ? leaderboard[selfIdx] : leaderboard[0];
-  const effectiveIdx = selfIdx >= 0 ? selfIdx : 0;
+  try {
+    // With no ?am, hand back the roster so the client can pick one.
+    if (!amEmail) {
+      const list = await necroclashAms();
+      if (list.error) return NextResponse.json(list, { status: 400 });
+      const first = (list.ams || [])[0];
+      if (!first) {
+        return NextResponse.json({ error: 'The AMs tab is empty.' }, { status: 404 });
+      }
+      const data = await necroclashData(first.am_email);
+      return NextResponse.json({ ...data, ams: list.ams });
+    }
 
-  // Soul Duel: paired against the next AM down the board (wraps to top).
-  const rival = leaderboard[(effectiveIdx + 1) % leaderboard.length];
-  const maxEp = Math.max(...leaderboard.map((r) => r.ep), 1);
-  const selfPct = Math.round((self.ep / maxEp) * 100);
-  const rivalPct = Math.round((rival.ep / maxEp) * 100);
-
-  // Coven Clash: self + the AM two spots down, vs the next two after that.
-  const mate = leaderboard[(effectiveIdx + 2) % leaderboard.length];
-  const oppA = leaderboard[(effectiveIdx + 3) % leaderboard.length];
-  const oppB = leaderboard[(effectiveIdx + 4) % leaderboard.length];
-
-  const partners = await getAllPartners();
-  // Reckoning target: the Tier 2 (Leviathan) partner with the fewest orders
-  // delivered so far among self + mate's combined portfolio — i.e. the
-  // hardest Whale still standing.
-  const covenPartnerEmails = new Set([self.amEmail, mate.amEmail]);
-  const leviathans = partners
-    .filter((p) => p.segment === 'Tier 2' && covenPartnerEmails.has(p.am_email))
-    .sort((a, b) => Number(a.orders_delivered) - Number(b.orders_delivered));
-  const boss = leviathans[0];
-  const bossLadder = boss ? ladderInfo(Number(boss.orders_delivered)) : null;
-
-  const rivalCovenEmails = new Set([oppA.amEmail, oppB.amEmail]);
-  const rivalLeviathans = partners
-    .filter((p) => p.segment === 'Tier 2' && rivalCovenEmails.has(p.am_email))
-    .sort((a, b) => Number(a.orders_delivered) - Number(b.orders_delivered));
-  const rivalBossLadder = rivalLeviathans[0] ? ladderInfo(Number(rivalLeviathans[0].orders_delivered)) : null;
-
-  // Weekly quest: reactivate 2 Leviathans — progress = how many Tier 2
-  // partners in self's own portfolio have reached any paid credit tier.
-  const myLeviathansReactivated = partners.filter(
-    (p) => p.am_email === self.amEmail && p.segment === 'Tier 2' && ladderInfo(Number(p.orders_delivered)).cur.credit > 0
-  ).length;
-
-  return NextResponse.json({
-    leaderboard,
-    self,
-    duel: {
-      rival,
-      selfPct,
-      rivalPct,
-      selfLeading: self.ep >= rival.ep,
-    },
-    coven: {
-      mate: mate.amName,
-      rivalA: oppA.amName,
-      rivalB: oppB.amName,
-      boss: boss
-        ? { name: boss.store_name, segmentLabel: 'Leviathan · Tier 2', progressPct: bossLadder?.pct ?? 0 }
-        : null,
-      rivalProgressPct: rivalBossLadder?.pct ?? 0,
-    },
-    quest: {
-      text: 'Reactivate 2 Leviathans this week',
-      progress: Math.min(myLeviathansReactivated, 2),
-      target: 2,
-      complete: myLeviathansReactivated >= 2,
-    },
-  });
+    const [data, list] = await Promise.all([necroclashData(amEmail), necroclashAms()]);
+    if (data.error) return NextResponse.json(data, { status: 400 });
+    return NextResponse.json({ ...data, ams: list.ams || [] });
+  } catch (err) {
+    console.error('necroclash: Apps Script call failed', err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Upstream unavailable' },
+      { status: 502 }
+    );
+  }
 }
