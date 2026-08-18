@@ -30,23 +30,41 @@ export const WHEEL_TIERS = [
 ] as const;
 
 /**
- * PRD Section 15 prize pool. `weights` is indexed to match WHEEL_TIERS
- * (Starter → Jackpot) and each column sums to 100 — assertWeightsValid()
- * checks that, and the sync endpoint runs it on boot so a typo fails loudly
- * rather than quietly skewing the economics.
+ * PRD Section 15 prize pool, with two deliberate departures from the PRD's
+ * original eight-row table:
+ *
+ *   - "Free Packaging" → "Glovo Branded Merchandise"
+ *   - "Photography" → "Pro Food Photography Session"
+ *   - The "Photo + ₦25K" combo prize is REMOVED. Its weight is merged into
+ *     "₦25K Credit" in each tier, so the table is sum-preserving — no
+ *     rescaling, no odd decimals, nothing else moved. This also quietly
+ *     helps with PRD Section 13's stacking risk: the combo was the one
+ *     prize that could hand out ₦25,000 AND a physical session in a single
+ *     spin, on top of whatever the ladder had already paid — removing it
+ *     doesn't touch the cap logic below but does shrink how often the cap
+ *     gets hit in one move. Confirm this reads correctly against Finance's
+ *     expectations before treating it as final.
+ *
+ * `weights` is indexed to match WHEEL_TIERS (Starter → Jackpot) and each
+ * column must sum to 100 — assertWeightsValid() checks that, and the sync
+ * endpoint runs it on boot so a typo fails loudly rather than quietly
+ * skewing the economics.
  *
  * The array order is a wire contract: the API returns prizeIndex into it and
- * the wheel renders wedges in this order.
+ * the wheel renders wedges in this order. PRIZE_LABELS below is what
+ * lib/rewards.ts's marketing tiles are meant to mirror — the two lists
+ * should stay in the same words even though rewards.ts groups ₦5K/₦10K/₦25K
+ * Credit into one "Ads Credit" tile for display.
  */
 export const PRIZES = [
-  { label: 'Free Packaging', cash: 0,     weights: [40, 25,  18, 12, 8,  4] },
-  { label: 'Branding Kit',   cash: 0,     weights: [25, 25,  20, 15, 10, 6] },
-  { label: '₦5K Credit',     cash: 5000,  weights: [20, 20,  18, 15, 12, 8] },
-  { label: 'IG Feature',     cash: 0,     weights: [10, 12,  14, 15, 15, 12] },
-  { label: '₦10K Credit',    cash: 10000, weights: [4,  10,  15, 18, 20, 20] },
-  { label: 'Photography',    cash: 0,     weights: [1,  5,   8,  12, 15, 18] },
-  { label: '₦25K Credit',    cash: 25000, weights: [0,  2.5, 6,  11, 16, 24] },
-  { label: 'Photo + ₦25K',   cash: 25000, weights: [0,  0.5, 1,  2,  4,  8] },
+  { label: 'Glovo Branded Merchandise',  cash: 0,     weights: [40, 25,  18, 12, 8,  4] },
+  { label: 'Branding Kit',               cash: 0,     weights: [25, 25,  20, 15, 10, 6] },
+  { label: '₦5K Credit',                 cash: 5000,  weights: [20, 20,  18, 15, 12, 8] },
+  { label: 'IG Feature',                 cash: 0,     weights: [10, 12,  14, 15, 15, 12] },
+  { label: '₦10K Credit',                cash: 10000, weights: [4,  10,  15, 18, 20, 20] },
+  { label: 'Pro Food Photography Session', cash: 0,   weights: [1,  5,   8,  12, 15, 18] },
+  // 24 = old 24 + the removed combo's 8; likewise for every other tier.
+  { label: '₦25K Credit',                cash: 25000, weights: [0,  3,   7,  13, 20, 32] },
 ] as const;
 
 // PRD Section 13 / Open Question 1. Set to false only with Finance sign-off.

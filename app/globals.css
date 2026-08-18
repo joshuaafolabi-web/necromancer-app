@@ -10,3 +10,36 @@ a:hover { color: #007a63; }
 select, input, button { font-family: inherit; }
 @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 * { box-sizing: border-box; }
+
+/* ---------------------------------------------------------------------------
+ * Responsive shell for the logged-in Arcade view.
+ *
+ * React inline styles (used everywhere else in this codebase) can't express
+ * @media queries, so the one layout that genuinely needs to reflow across
+ * phone/tablet/desktop gets a real CSS class. Everything else (cards,
+ * buttons, colors) stays as inline styles for a minimal diff.
+ *
+ * Deliberately a fluid single column that widens with the viewport, rather
+ * than a two-column grid that would re-flow content into a different visual
+ * order at a breakpoint — that's the kind of layout change that's easy to
+ * get subtly wrong without being able to render and look at it, and a
+ * centered column that grows is a legitimate, low-risk way to use the extra
+ * space on a tablet or desktop screen.
+ * ------------------------------------------------------------------------ */
+.arcade-shell {
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 0 0 40px;
+}
+
+@media (min-width: 700px) {
+  .arcade-shell { max-width: 640px; }
+}
+
+@media (min-width: 1080px) {
+  .arcade-shell { max-width: 760px; padding-top: 8px; }
+}
+
+/* Celebration moment (PRD Section 8). Transform + opacity only, so it stays
+   on the compositor and doesn't drop frames on a low-end Android tablet. */
+@keyframes confetti-fall { to { transform: translateY(105vh) rotate(540deg); opacity: 0; } }

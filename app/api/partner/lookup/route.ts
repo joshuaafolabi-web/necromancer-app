@@ -65,6 +65,12 @@ export async function GET(req: NextRequest) {
       // appearance leaks nothing about the real odds.
       prizeLabels: PRIZE_LABELS,
       creditSteps: CREDIT_STEP_LABELS,
+      // Full win history, most recent first, so the partner can see every
+      // prize they've collected across all wheel tiers, not just whatever
+      // they most recently won in this browser session.
+      spins: [...state.spins]
+        .sort((a, b) => b.at.localeCompare(a.at))
+        .map((s) => ({ wheelTier: s.wheelTier, prizeLabel: s.prizeLabel, at: s.at })),
     });
   } catch (err) {
     console.error('lookup failed', err);

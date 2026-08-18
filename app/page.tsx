@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import RewardGallery from '@/components/RewardGallery';
+import BrandMark from '@/components/BrandMark';
 
 /**
  * The partner-facing landing page — the pitch for the 30-day challenge.
@@ -13,21 +14,21 @@ import RewardGallery from '@/components/RewardGallery';
  *
  * Accepting happens inside /arcade rather than here, because it needs a SAID
  * to know which store accepted and which Account Manager to notify.
+ *
+ * The full ₦0→₦25,000 ladder table used to live here too, duplicating the
+ * Credit Ladder card already shown inside /arcade once a partner logs in.
+ * Removed — the pitch page sells the challenge and the prizes; the ladder
+ * detail belongs to the one place a partner can see it against their own
+ * actual order count.
  */
-
-const LADDER = [
-  { orders: '5', reward: '₦5,000', note: 'first spin unlocks' },
-  { orders: '10', reward: '₦10,000', note: '' },
-  { orders: '15', reward: '₦12,500', note: '' },
-  { orders: '20', reward: '₦15,000', note: 'Jackpot wheel unlocks' },
-  { orders: '30', reward: '₦20,000', note: '' },
-  { orders: '40', reward: '₦25,000', note: 'Full Recovery' },
-];
-
 export default function Home() {
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #FFF9E8 0%, #F5F5F7 100%)', color: '#1D1D1F' }}>
-      <div style={{ maxWidth: 1120, margin: '0 auto', padding: '48px 20px 64px' }}>
+      <div style={{ maxWidth: 1120, margin: '0 auto', padding: '28px 20px 64px' }}>
+
+        <div style={{ marginBottom: 28 }}>
+          <BrandMark size={24} />
+        </div>
 
         {/* Hero */}
         <div style={{ maxWidth: 720, marginBottom: 34 }}>
@@ -48,38 +49,12 @@ export default function Home() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24, alignItems: 'start' }}>
 
           {/* What's in it for them */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div style={{ background: '#fff', borderRadius: 24, padding: '26px 24px', boxShadow: '0 24px 60px rgba(0,0,0,0.08)', border: '1px solid rgba(0,0,0,0.04)' }}>
-              <h2 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, fontSize: 19, margin: '0 0 4px' }}>What you earn</h2>
-              <p style={{ fontSize: 13, color: '#8E8E93', margin: '0 0 18px', lineHeight: 1.6 }}>
-                Ads Credit is paid automatically as you cross each step. Nothing to claim.
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {LADDER.map((step, i) => (
-                  <div
-                    key={step.orders}
-                    style={{
-                      display: 'grid', gridTemplateColumns: '76px 1fr auto', alignItems: 'center', gap: 10,
-                      padding: '10px 12px', borderRadius: 12,
-                      background: i === LADDER.length - 1 ? '#FFFBEC' : 'transparent',
-                      border: i === LADDER.length - 1 ? '1px solid rgba(255,194,68,0.35)' : '1px solid transparent',
-                    }}
-                  >
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#8E8E93' }}>{step.orders} orders</div>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: i === LADDER.length - 1 ? '#B8860B' : '#00A082' }}>{step.reward}</div>
-                    <div style={{ fontSize: 10.5, fontWeight: 600, color: '#8E8E93', textAlign: 'right' }}>{step.note}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ background: '#fff', borderRadius: 24, padding: '26px 24px', boxShadow: '0 24px 60px rgba(0,0,0,0.08)', border: '1px solid rgba(0,0,0,0.04)' }}>
-              <h2 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, fontSize: 19, margin: '0 0 4px' }}>What you can win</h2>
-              <p style={{ fontSize: 13, color: '#8E8E93', margin: '0 0 18px', lineHeight: 1.6 }}>
-                Every 5 orders opens a better wheel. The higher you climb, the better the odds.
-              </p>
-              <RewardGallery columns={2} />
-            </div>
+          <div style={{ background: '#fff', borderRadius: 24, padding: '26px 24px', boxShadow: '0 24px 60px rgba(0,0,0,0.08)', border: '1px solid rgba(0,0,0,0.04)' }}>
+            <h2 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, fontSize: 19, margin: '0 0 4px' }}>What you can win</h2>
+            <p style={{ fontSize: 13, color: '#8E8E93', margin: '0 0 18px', lineHeight: 1.6 }}>
+              Every 5 orders opens a better wheel. The higher you climb, the better the odds.
+            </p>
+            <RewardGallery minColumns={2} />
           </div>
 
           {/* CTA */}
@@ -114,6 +89,7 @@ export default function Home() {
               </ol>
               <p style={{ fontSize: 11, lineHeight: 1.6, color: '#8E8E93', margin: '14px 0 0' }}>
                 Ads Credit from the ladder and the wheel combined is capped at ₦25,000 per store.
+                Your full ladder and progress are on your Arcade once you log in.
               </p>
             </div>
           </div>

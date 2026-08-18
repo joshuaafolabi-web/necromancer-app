@@ -2,13 +2,26 @@ import { REWARDS } from '@/lib/rewards';
 
 /**
  * The prize showcase. A tile with an `image` renders the photo; a tile
- * without renders a branded gradient card carrying its emoji — so a missing
- * or unavailable image degrades to something deliberate rather than a broken
- * image icon on a partner's tablet.
+ * without renders a branded gradient card carrying its emoji/glyph — so a
+ * missing or unavailable image degrades to something deliberate rather than
+ * a broken image icon on a partner's tablet.
+ *
+ * Grid columns are `auto-fit`, not a fixed count — the browser fits as many
+ * ~150px tiles as the container allows, so this reflows correctly at phone,
+ * tablet, and desktop widths with no breakpoints to maintain by hand.
+ * `minColumns` only sets a floor for very wide containers (it caps how far
+ * the grid stretches on desktop, since past 3-4 columns the tiles start
+ * looking sparse rather than dense).
  */
-export default function RewardGallery({ columns = 2 }: { columns?: number }) {
+export default function RewardGallery({ minColumns = 2 }: { minColumns?: number }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: 14 }}>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(auto-fit, minmax(clamp(130px, ${100 / minColumns}%, 220px), 1fr))`,
+        gap: 14,
+      }}
+    >
       {REWARDS.map((item) => (
         <div
           key={item.title}
@@ -35,7 +48,9 @@ export default function RewardGallery({ columns = 2 }: { columns?: number }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 40,
+                fontSize: item.emoji.length === 1 ? 44 : 40,
+                fontWeight: item.emoji.length === 1 ? 800 : 400,
+                color: item.emoji.length === 1 ? item.tint : undefined,
                 background: `linear-gradient(150deg, ${item.tint}22, ${item.tint}0D)`,
                 borderBottom: `1px solid ${item.tint}1A`,
               }}

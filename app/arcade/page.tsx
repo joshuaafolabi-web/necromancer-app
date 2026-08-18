@@ -8,6 +8,7 @@ import RewardGallery from '@/components/RewardGallery';
 // rather than being declared here, so this page can't disagree with the
 // backend about the rules. amEmail is no longer returned at all — anyone can
 // try 6-digit SAIDs, and a lucky guess shouldn't hand back a staff email.
+type SpinRecord = { wheelTier: string; prizeLabel: string; at: string };
 type LookupResponse = {
   partner: { storeName: string; said: string; segment: string; ordersDelivered: number };
   ladder: { currentLabel: string; currentCredit: number; nextLabel: string | null; ordersToNext: number | null; progressPct: number; stepIndex: number };
@@ -16,7 +17,24 @@ type LookupResponse = {
   challenge: { accepted: boolean; acceptedAt: string | null; dayNumber: number | null; daysLeft: number | null; expired?: boolean };
   prizeLabels: string[];
   creditSteps: { orders: number; label: string }[];
+  spins: SpinRecord[];
 };
+
+/** All partners are in Nigeria, so every timestamp shown to them renders in
+ *  Africa/Lagos regardless of the device's own clock/timezone setting. */
+function formatLagosTime(iso: string) {
+  try {
+    return new Intl.DateTimeFormat('en-NG', {
+      timeZone: 'Africa/Lagos',
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
 
 export default function ArcadePage() {
   const [said, setSaid] = useState('');
@@ -124,7 +142,21 @@ export default function ArcadePage() {
       setTimeout(() => {
         setSpinning(false);
         setWonPrize(result.prizeLabel);
-        setData((d) => (d ? { ...d, wheel: { ...d.wheel, spinAvailable: false } } : d));
+        setData((d) => {
+          if (!d) return d;
+          const won: SpinRecord = {
+            wheelTier: result.wheelTier,
+            prizeLabel: result.prizeLabel,
+            at: new Date().toISOString(),
+          };
+          return {
+            ...d,
+            wheel: { ...d.wheel, spinAvailable: false },
+            // Prepended locally so the prize history shows this win
+            // immediately, without waiting on a re-login to refetch it.
+            spins: [won, ...d.spins],
+          };
+        });
       }, 3200);
     } catch {
       setSpinning(false);
@@ -137,7 +169,12 @@ export default function ArcadePage() {
       <div style={{ minHeight: '100vh', background: '#F5F5F7' }}>
         <TopNav />
         <div style={{ display: 'flex', justifyContent: 'center', padding: '44px 16px 72px' }}>
-          <div style={{ width: '100%', maxWidth: 1120, display: 'grid', gap: 24, gridTemplateColumns: '1.15fr 0.9fr' }}>
+          {/* auto-fit rather than a fixed two-column split: a fixed
+              gridTemplateColumns here squeezed both cards onto a phone
+              screen with no fallback. This collapses to one column below
+              ~700px and opens to two above it, same pattern as the home
+              page. */}
+          <div style={{ width: '100%', maxWidth: 1120, display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))' }}>
             <div style={{ background: '#fff', borderRadius: 28, padding: '32px 28px', boxShadow: '0 24px 60px rgba(0,0,0,0.08)' }}>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 999, background: '#FFF7E3', color: '#B8860B', fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
                 Reactivation Arcade
@@ -146,7 +183,7 @@ export default function ArcadePage() {
               <p style={{ fontSize: 15, lineHeight: 1.7, color: '#5A5A63', margin: '0 0 24px' }}>
                 Check your Ads Credit ladder, unlock the spin wheel, and discover the rewards your store can win.
               </p>
-              <RewardGallery columns={2} />
+              <RewardGallery minColumns={2} />
             </div>
 
             <div style={{ background: '#fff', borderRadius: 28, padding: '28px 24px', boxShadow: '0 24px 60px rgba(0,0,0,0.08)', height: 'fit-content' }}>
@@ -174,12 +211,12 @@ export default function ArcadePage() {
     );
   }
 
-  const { partner, ladder, wheel, credit, prizeLabels, creditSteps, challenge } = data;
+  const { partner, ladder, wheel, credit, prizeLabels, creditSteps, challenge, spins } = data;
 
   return (
     <div style={{ minHeight: '100vh', background: '#F5F5F7' }}>
       <TopNav />
-      <div style={{ maxWidth: 420, margin: '0 auto', padding: '0 0 40px' }}>
+      <div className="arcade-shell">
         <div style={{ padding: '14px 14px 0' }}>
           <div style={{ borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 9, background: '#fff', border: '1px solid rgba(245,158,11,0.2)', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
             <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#F59E0B', flex: 'none', animation: 'pulse-dot 1.6s infinite' }} />
@@ -243,7 +280,17 @@ export default function ArcadePage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
               <div>
                 <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(69,26,3,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ads Credit Balance</div>
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 32, fontWeight: 800, color: '#451A03', marginTop: 5, letterSpacing: '-0.02em' }}>₦{ladder.currentCredit.toLocaleString()}</div>
+                {/*
+                  Previously this showed ladder.currentCredit only, which
+                  ignores any cash prize won from the wheel (₦5K/₦10K/₦25K
+                  Credit) — winning one didn't move this number at all.
+                  credit.lifetimeEarned is ladder + wheel combined (capped
+                  at ₦25,000), so a spin now visibly changes the balance.
+                  The ladder itself still updates the instant an order
+                  crosses a threshold, unchanged, per the PRD.
+                */}
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 32, fontWeight: 800, color: '#451A03', marginTop: 5, letterSpacing: '-0.02em' }}>₦{credit.lifetimeEarned.toLocaleString()}</div>
+                <div style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(69,26,3,0.45)', marginTop: 2 }}>Ladder + wheel prizes</div>
               </div>
               <div style={{ width: 42, height: 42, borderRadius: 14, background: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flex: 'none' }}>🍽</div>
             </div>
@@ -292,12 +339,15 @@ export default function ArcadePage() {
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
-            <Wheel rotationDeg={rotation} locked={wheel.locked} labels={prizeLabels} />
+            {/* Spin Now moved above the wheel — it was previously below,
+                where on a short viewport it could sit under the fold right
+                after the wheel finished rendering. */}
             {wheel.spinAvailable && !wonPrize && (
               <button onClick={spin} disabled={spinning} style={{ padding: '13px 40px', borderRadius: 999, border: 'none', fontSize: 13, fontWeight: 700, letterSpacing: '0.02em', cursor: spinning ? 'default' : 'pointer', background: spinning ? '#E5E7EB' : '#FFC244', color: spinning ? '#9CA3AF' : '#1D1D1F', boxShadow: spinning ? 'none' : '0 4px 16px rgba(255,194,68,0.4)' }}>
                 {spinning ? 'Spinning…' : 'Spin Now'}
               </button>
             )}
+            <Wheel rotationDeg={rotation} locked={wheel.locked} labels={prizeLabels} />
             {wonPrize && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 10, color: '#8E8E93', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'JetBrains Mono, monospace' }}>You won</div>
@@ -312,6 +362,36 @@ export default function ArcadePage() {
               <div style={{ fontSize: 12, color: '#DC2626', textAlign: 'center', lineHeight: 1.4 }}>{error}</div>
             )}
           </div>
+        </div>
+
+        {/* Prize history — every past win across every wheel tier, not just
+            whatever was most recently spun in this browser session. */}
+        <div style={{ margin: '0 18px 16px', background: '#fff', borderRadius: 16, padding: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: '#8E8E93', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'JetBrains Mono, monospace', marginBottom: 14 }}>
+            Your Prizes {spins.length > 0 && `(${spins.length})`}
+          </div>
+          {spins.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: '#8E8E93', lineHeight: 1.6 }}>
+              No prizes yet — spin the wheel to start winning.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {spins.map((s, i) => (
+                <div
+                  key={`${s.wheelTier}-${s.at}`}
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
+                    padding: '10px 4px', borderTop: i > 0 ? '1px solid #F0F0F2' : 'none',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1D1D1F' }}>{s.prizeLabel}</div>
+                    <div style={{ fontSize: 10.5, color: '#8E8E93', marginTop: 1 }}>{s.wheelTier} Wheel · {formatLagosTime(s.at)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div style={{ textAlign: 'center', fontSize: 10, color: '#C7C7CC', padding: '8px 0 16px' }}>Necromancer Pilot · Glovo Nigeria</div>
