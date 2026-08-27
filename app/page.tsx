@@ -1,4 +1,7 @@
+'use client';
+import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import RewardGallery from '@/components/RewardGallery';
 import BrandMark from '@/components/BrandMark';
 
@@ -12,8 +15,9 @@ import BrandMark from '@/components/BrandMark';
  * link is a small footer entry, since AMs should use the Apps Script
  * NECROCLASH deployment anyway (it has real Google identity behind it).
  *
- * Accepting happens inside /arcade rather than here, because it needs a SAID
- * to know which store accepted and which Account Manager to notify.
+ * The SAID box below hands off to /arcade?said=XXXXXX rather than logging in
+ * right here, because accepting the challenge needs a SAID to know which
+ * store accepted and which Account Manager to notify — /arcade owns that.
  *
  * The full ₦0→₦25,000 ladder table used to live here too, duplicating the
  * Credit Ladder card already shown inside /arcade once a partner logs in.
@@ -22,6 +26,19 @@ import BrandMark from '@/components/BrandMark';
  * actual order count.
  */
 export default function Home() {
+  const router = useRouter();
+  const [said, setSaid] = useState('');
+  const [error, setError] = useState('');
+
+  function join() {
+    const normalized = said.trim();
+    if (normalized.length !== 6) {
+      setError('Please enter a valid 6-digit Store Address ID.');
+      return;
+    }
+    router.push(`/arcade?said=${encodeURIComponent(normalized)}`);
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #FFF9E8 0%, #F5F5F7 100%)', color: '#1D1D1F' }}>
       <div style={{ maxWidth: 1120, margin: '0 auto', padding: '28px 20px 64px' }}>
@@ -33,17 +50,19 @@ export default function Home() {
         {/* Hero */}
         <div style={{ maxWidth: 720, marginBottom: 34 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 999, background: '#1D1D1F', color: '#FFC244', fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
-            30-day challenge
+            30-day business growth
           </div>
           <h1 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, fontSize: 'clamp(30px, 6vw, 50px)', margin: '18px 0 14px', lineHeight: 1.08 }}>
-            Bring your store back to life.
+            More orders. Free rewards. Simple.
           </h1>
-          <p style={{ fontSize: 17, lineHeight: 1.7, color: '#5A5A63', margin: 0 }}>
-            You have <strong style={{ color: '#1D1D1F' }}>30 days</strong> to get your store moving
-            again — and Glovo is paying you to do it. Every delivered order climbs the Ads Credit
-            ladder, up to <strong style={{ color: '#1D1D1F' }}>₦25,000</strong>. Hit 5 orders and the
-            prize wheel opens too.
+          <p style={{ fontSize: 17, lineHeight: 1.7, color: '#5A5A63', margin: '0 0 16px' }}>
+            For the next 30 days, Glovo is rewarding you for every order you complete.
           </p>
+          <ol style={{ margin: 0, padding: '0 0 0 20px', color: '#5A5A63', fontSize: 15.5, lineHeight: 1.9 }}>
+            <li>Deliver orders to earn up to <strong style={{ color: '#1D1D1F' }}>₦25,000</strong> in Ads Credit.</li>
+            <li>Hit 10 orders to unlock the Prize Wheel.</li>
+            <li>Spin to win free Glovo Merchandise, Pro Food Photography Session, and Instagram Story Feature.</li>
+          </ol>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24, alignItems: 'start' }}>
@@ -62,18 +81,27 @@ export default function Home() {
             <div style={{ background: '#1D1D1F', borderRadius: 24, padding: '30px 26px', boxShadow: '0 24px 60px rgba(0,0,0,0.16)' }}>
               <div style={{ width: 52, height: 52, borderRadius: 16, background: 'rgba(255,194,68,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, marginBottom: 18 }}>☠</div>
               <h2 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, fontSize: 22, margin: '0 0 10px', color: '#fff' }}>
-                Accept the challenge
+                Ready to grow?
               </h2>
               <p style={{ fontSize: 13.5, lineHeight: 1.65, color: 'rgba(255,255,255,0.7)', margin: '0 0 22px' }}>
-                Enter your 6-digit Store Address ID to start. We will let your Account Manager know
-                you are in, and they will help you get your first orders.
+                Type your 6-digit Store Address ID below to join. Your Account Manager is on
+                standby to help you secure your first set of orders.
               </p>
-              <Link
-                href="/arcade"
-                style={{ display: 'block', textAlign: 'center', textDecoration: 'none', background: '#FFC244', color: '#1D1D1F', borderRadius: 999, padding: 15, fontSize: 15, fontWeight: 800 }}
+              <input
+                value={said}
+                onChange={(e) => { setSaid(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(''); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') join(); }}
+                maxLength={6}
+                placeholder="000000"
+                style={{ width: '100%', boxSizing: 'border-box', border: '1.5px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, fontSize: 20, letterSpacing: '0.2em', textAlign: 'center', fontFamily: 'JetBrains Mono, monospace', outline: 'none', marginBottom: 10, color: '#fff' }}
+              />
+              {error && <div style={{ fontSize: 12, color: '#F87171', marginBottom: 10 }}>{error}</div>}
+              <button
+                onClick={join}
+                style={{ display: 'block', width: '100%', textAlign: 'center', border: 'none', background: '#FFC244', color: '#1D1D1F', borderRadius: 999, padding: 15, fontSize: 15, fontWeight: 800, cursor: 'pointer' }}
               >
-                I&rsquo;m in — let&rsquo;s go
-              </Link>
+                I&rsquo;m in — Let&rsquo;s Go
+              </button>
               <p style={{ fontSize: 11, lineHeight: 1.6, color: 'rgba(255,255,255,0.45)', margin: '14px 0 0', textAlign: 'center' }}>
                 Your Account Manager has your SAID if you are not sure of it.
               </p>

@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkSyncAuth } from '@/lib/syncAuth';
 import { writePartnerSnapshot, type SyncedPartner } from '@/lib/blobStore';
-import { assertWeightsValid, normalizeSaid } from '@/lib/gameRules';
+import { normalizeSaid } from '@/lib/gameRules';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,14 +26,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Expected { partners: [...] }' }, { status: 400 });
   }
 
-  // A bad prize table would silently change the reward economics, so it's
-  // checked on every sync rather than trusted.
-  try {
-    assertWeightsValid();
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
-  }
-
   const skipped: string[] = [];
   const partners: SyncedPartner[] = [];
 
@@ -46,7 +38,7 @@ export async function POST(req: NextRequest) {
     partners.push({
       said,
       storeName: String(raw.storeName ?? '').trim() || 'Your store',
-      segment: String(raw.segment ?? '').trim(),
+      tier: String(raw.tier ?? '').trim(),
       orders: Number(raw.orders) || 0,
     });
   }

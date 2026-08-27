@@ -1,16 +1,25 @@
 // app/api/partner/spin/route.ts
 //
-// The spin is resolved here, server-side, against the tier's own weight
-// column. The client receives only the resolved index and label — never the
-// odds (PRD Section 11).
+// The claim is resolved here, server-side, against the one milestone the
+// partner's order count has next made claimable. The client receives only
+// win/loss and the label — never the odds (PRD Section 11's spirit, carried
+// over from the old weighted wheel).
 import { NextRequest, NextResponse } from 'next/server';
-import { findPartner, readState, claimSpin, releaseSpinClaim, recordSpin } from '@/lib/blobStore';
 import {
-  ladderInfo, wheelTierIdx, WHEEL_TIERS, cashForPrizeLabel, resolveSpin,
-  PRIZE_LABELS, normalizeSaid,
-} from '@/lib/gameRules';
+  findPartner, readState, readPartnerSnapshot, claimSpin, releaseSpinClaim, recordSpin,
+} from '@/lib/blobStore';
+import { nextClaimable, resolveMilestone, normalizeSaid } from '@/lib/gameRules';
 
 export const dynamic = 'force-dynamic';
+
+/** True if `said` is among the top 5 by orders delivered, counting only
+ *  partners who've also reached `minOrders`. Ties at the boundary resolve by
+ *  whatever order the roster happens to sort in — acceptable for a pilot,
+ *  not a guarantee worth over-engineering before real data exists. */
+function isTopFive(said: string, minOrders: number, partners: { said: string; orders: number }[]): boolean {
+  const cohort = partners.filter((p) => p.orders >= minOrders).sort((a, b) => b.orders - a.orders);
+  return cohort.slice(0, 5).some((p) => p.said === said);
+}
 
 export async function POST(req: NextRequest) {
   let rawSaid = '';
@@ -30,46 +39,60 @@ export async function POST(req: NextRequest) {
     if (!partner) return NextResponse.json({ error: 'SAID not found' }, { status: 404 });
 
     const orders = partner.orders;
-    const tierIdx = wheelTierIdx(orders);
-    if (tierIdx < 0) {
-      return NextResponse.json({ error: 'No wheel tier unlocked yet' }, { status: 403 });
-    }
-    const tier = WHEEL_TIERS[tierIdx];
-
     const state = await readState(said);
-    if (state.spins.some((s) => s.wheelTier === tier.name)) {
-      return NextResponse.json({ error: 'Spin already used for this tier' }, { status: 409 });
+    const claimedNames = new Set(state.spins.map((s) => s.wheelTier));
+    const milestone = nextClaimable(orders, claimedNames);
+    if (!milestone) {
+      return NextResponse.json({ error: 'No milestone available to claim right now' }, { status: 403 });
+    }
+
+    // The Instagram rank gate can change as the roster grows, so a partner
+    // who isn't top 5 yet gets to try again later rather than burning their
+    // one claim on a permanent "not yet" — nothing is locked on a miss here.
+    if (milestone.requiresTopRank) {
+      const snapshot = await readPartnerSnapshot();
+      const qualifies = isTopFive(said, milestone.minOrders, snapshot?.partners ?? []);
+      if (!qualifies) {
+        return NextResponse.json({
+          wheelTier: milestone.name,
+          won: false,
+          prizeLabel: milestone.label,
+          notYetRanked: true,
+        });
+      }
     }
 
     // Atomic claim. Two simultaneous taps both pass the check above; only
-    // one wins here, so only one prize is ever awarded per tier.
-    const won = await claimSpin(said, tier.name);
-    if (!won) {
-      return NextResponse.json({ error: 'Spin already used for this tier' }, { status: 409 });
+    // one wins here, so only one outcome is ever recorded per milestone.
+    const claimed = await claimSpin(said, milestone.name);
+    if (!claimed) {
+      return NextResponse.json({ error: 'This milestone has already been claimed' }, { status: 409 });
     }
 
     try {
-      const wheelCredit = state.spins.reduce((s, spin) => s + cashForPrizeLabel(spin.prizeLabel), 0);
-      const lifetimeCredit = ladderInfo(orders).cur.credit + wheelCredit;
+      const lifetimeCredit = state.spins.reduce((s, spin) => s + spin.credit, 0);
+      const result = resolveMilestone(milestone, lifetimeCredit);
 
-      const result = resolveSpin(tierIdx, lifetimeCredit);
       await recordSpin(said, {
-        wheelTier: tier.name,
-        prizeIndex: result.index,
+        wheelTier: milestone.name,
         prizeLabel: result.label,
+        credit: result.credit,
+        won: result.won,
         at: new Date().toISOString(),
       });
 
+      const nextAfter = nextClaimable(orders, new Set([...claimedNames, milestone.name]));
+
       return NextResponse.json({
-        wheelTier: tier.name,
-        prizeIndex: result.index,
+        wheelTier: milestone.name,
+        won: result.won,
         prizeLabel: result.label,
-        prizeLabels: PRIZE_LABELS,
+        nextAvailable: !!nextAfter,
       });
     } catch (err) {
-      // Give the spin back rather than burning it on an error the partner
+      // Give the claim back rather than burning it on an error the partner
       // didn't cause.
-      await releaseSpinClaim(said, tier.name);
+      await releaseSpinClaim(said, milestone.name);
       throw err;
     }
   } catch (err) {

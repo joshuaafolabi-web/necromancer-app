@@ -46,7 +46,7 @@ export default function TopNav() {
       <BrandMark size={18} />
       <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 16, background: '#fff', boxShadow: '0 1px 6px rgba(0,0,0,0.08)' }}>
         <Link href="/" style={btn(isHome)}>Home</Link>
-        {showArcade && <Link href="/arcade" style={btn(!!isArcade)}>Reactivation Arcade</Link>}
+        {showArcade && <Link href="/arcade" style={btn(!!isArcade)}>Store Reactivation</Link>}
         {showClash && <Link href="/clash?access=manager" style={btn(!!isClash)}>NECROCLASH</Link>}
       </div>
     </div>

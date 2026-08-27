@@ -2,8 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findPartner, readState } from '@/lib/blobStore';
 import {
-  ladderInfo, wheelTierIdx, WHEEL_TIERS, cashForPrizeLabel, challengeState,
-  CREDIT_CAP_ENABLED, LIFETIME_CREDIT_CAP, PRIZE_LABELS, CREDIT_STEP_LABELS, normalizeSaid,
+  MILESTONES, nextClaimable, nextUpcoming, challengeState,
+  CREDIT_CAP_ENABLED, LIFETIME_CREDIT_CAP, normalizeSaid,
 } from '@/lib/gameRules';
 
 export const dynamic = 'force-dynamic';
@@ -22,14 +22,19 @@ export async function GET(req: NextRequest) {
 
     const state = await readState(said);
     const orders = partner.orders;
-    const ladder = ladderInfo(orders);
-    const idx = wheelTierIdx(orders);
-    const locked = idx < 0;
-    const tier = locked ? null : WHEEL_TIERS[idx];
-    const jackpot = WHEEL_TIERS[WHEEL_TIERS.length - 1];
+    const claimedNames = new Set(state.spins.map((s) => s.wheelTier));
 
-    const wheelCredit = state.spins.reduce((s, spin) => s + cashForPrizeLabel(spin.prizeLabel), 0);
-    const lifetimeCredit = ladder.cur.credit + wheelCredit;
+    // The spin button always targets this one milestone next — the first
+    // one orders has already reached but hasn't been claimed yet.
+    const current = nextClaimable(orders, claimedNames);
+    // Once nothing reached is left unclaimed, "next" becomes the next
+    // threshold not yet reached at all, purely for the popup/progress copy.
+    const upcoming = current ? null : nextUpcoming(orders);
+
+    // Ads Credit Balance is spin-driven only — sum of what's actually been
+    // won so far, not anything implied by order count alone. Stays ₦0 until
+    // a claim resolves in the partner's favour.
+    const lifetimeCredit = state.spins.reduce((s, spin) => s + spin.credit, 0);
 
     return NextResponse.json({
       // No amEmail. Anyone can try 6-digit SAIDs, and a lucky guess should
@@ -37,23 +42,24 @@ export async function GET(req: NextRequest) {
       partner: {
         storeName: partner.storeName,
         said,
-        segment: partner.segment,
+        tier: partner.tier,
         ordersDelivered: orders,
       },
-      ladder: {
-        currentLabel: ladder.cur.label,
-        currentCredit: ladder.cur.credit,
-        nextLabel: ladder.next?.label ?? null,
-        ordersToNext: ladder.next ? ladder.next.orders - orders : null,
-        progressPct: ladder.pct,
-        stepIndex: ladder.idx,
-      },
+      // Every milestone with its reached/claimed state, for the progress
+      // track UI — replaces the old continuous ladder rungs.
+      milestones: MILESTONES.map((m) => ({
+        name: m.name,
+        label: m.label,
+        minOrders: m.minOrders,
+        kind: m.kind,
+        reached: orders >= m.minOrders,
+        claimed: claimedNames.has(m.name),
+      })),
       wheel: {
-        locked,
-        tierName: tier?.name ?? null,
-        ordersToUnlockFirst: locked ? WHEEL_TIERS[0].minOrders - orders : null,
-        ordersToJackpot: Math.max(jackpot.minOrders - orders, 0),
-        spinAvailable: tier ? !state.spins.some((s) => s.wheelTier === tier.name) : false,
+        spinAvailable: !!current,
+        current: current ? { name: current.name, label: current.label, kind: current.kind } : null,
+        nextMilestoneLabel: upcoming?.label ?? null,
+        ordersToNextMilestone: upcoming ? Math.max(upcoming.minOrders - orders, 0) : null,
       },
       credit: {
         lifetimeEarned: lifetimeCredit,
@@ -61,16 +67,11 @@ export async function GET(req: NextRequest) {
         atCap: CREDIT_CAP_ENABLED && lifetimeCredit >= LIFETIME_CREDIT_CAP,
       },
       challenge: challengeState(state.acceptedAt),
-      // Labels only, never weights — the wheel draws equal wedges so its
-      // appearance leaks nothing about the real odds.
-      prizeLabels: PRIZE_LABELS,
-      creditSteps: CREDIT_STEP_LABELS,
-      // Full win history, most recent first, so the partner can see every
-      // prize they've collected across all wheel tiers, not just whatever
-      // they most recently won in this browser session.
+      // Full win history, most recent first. `won` lets the UI show a loss
+      // ("no prize this time") distinctly from an actual claimed prize.
       spins: [...state.spins]
         .sort((a, b) => b.at.localeCompare(a.at))
-        .map((s) => ({ wheelTier: s.wheelTier, prizeLabel: s.prizeLabel, at: s.at })),
+        .map((s) => ({ wheelTier: s.wheelTier, prizeLabel: s.prizeLabel, won: s.won, at: s.at })),
     });
   } catch (err) {
     console.error('lookup failed', err);

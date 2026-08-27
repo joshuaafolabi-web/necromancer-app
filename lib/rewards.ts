@@ -1,23 +1,22 @@
 // lib/rewards.ts
 //
 // The prize showcase, shared by the home page and /arcade so the two can't
-// drift. These mirror lib/gameRules.ts's PRIZES table exactly — the three
-// Ads Credit denominations collapse into one "Ads Credit" tile for display,
-// but every other title here matches a real prize label a partner can
-// actually win, so what's advertised is what's drawn.
+// drift. These mirror lib/gameRules.ts's MILESTONES exactly — the ₦5,000
+// and ₦25,000 Ads Credit milestones collapse into one "Ads Credit" tile for
+// display, but every other title here matches a real prize label a partner
+// can actually win, so what's advertised is what's drawn. "Branding Kit"
+// was dropped from the reward set entirely (2026-08-27) — removed here too.
 //
 // IMAGES: `image` is optional. Leave it empty and the tile renders as a
-// branded gradient card with its emoji/glyph, which is the safer default —
-// it needs no network request (PRD Section 11 flags low-end tablets on
-// flaky kitchen wifi) and it can never show the wrong picture.
+// branded gradient card with its emoji/glyph — the safer default, since it
+// needs no network request (PRD Section 11 flags low-end tablets on flaky
+// kitchen wifi) and can never show the wrong picture.
 //
 // An earlier version of this file pointed the Instagram tile at an Unsplash
 // photo that turned out to be a circuit board — picked blind, without a way
-// to see what the photo ID actually showed. Every tile here uses the
-// no-network gradient fallback for the same reason: it's the only option
-// that's guaranteed correct without eyes on the image. Swap in a real photo
-// URL once you have one you've actually looked at;
-// images.unsplash.com is already allow-listed in next.config.js.
+// to see what the photo ID actually showed. The four images below are real
+// files in public/rewards/, each one actually viewed and confirmed to match
+// its title before being wired in here — never a guessed external URL.
 
 export type Reward = {
   title: string;
@@ -30,34 +29,30 @@ export type Reward = {
 export const REWARDS: Reward[] = [
   {
     title: 'Glovo Branded Merchandise',
-    blurb: 'Branded packaging and merch, delivered to your store.',
+    blurb: 'Branded packaging and merch, delivered to your store — unlocked at 20 orders.',
     emoji: '📦',
     tint: '#6B7280',
-  },
-  {
-    title: 'Store Branding Kit',
-    blurb: 'Signage and stickers to make your store stand out.',
-    emoji: '🎨',
-    tint: '#7C3AED',
+    image: '/rewards/merch.jpg',
   },
   {
     title: 'Pro Food Photography Session',
-    blurb: 'A photographer shoots your menu, properly.',
+    blurb: 'A photographer shoots your menu, properly — unlocked at 80 orders.',
     emoji: '📸',
     tint: '#374151',
+    image: '/rewards/photography.png',
   },
   {
     title: 'Instagram Story Feature',
-    blurb: 'Your store on the Glovo Nigeria Instagram.',
+    blurb: 'Your store on the Glovo Nigeria Instagram — for the top 5 stores past 100 orders.',
     emoji: '📱',
     tint: '#F59E0B',
+    image: '/rewards/instagram.jpg',
   },
   {
     title: 'Ads Credit',
-    // The literal Naira sign, rather than a generic money emoji — the most
-    // accurate "image" available for a cash prize without real photography.
-    blurb: '₦5,000 up to ₦25,000 to promote your store.',
+    blurb: 'A chance at ₦5,000 at 10, 15 and 20 orders, plus a guaranteed ₦25,000 at 40 orders.',
     emoji: '₦',
     tint: '#00A082',
+    image: '/rewards/ads-credit.jpg',
   },
 ];

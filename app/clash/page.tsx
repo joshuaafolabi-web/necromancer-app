@@ -58,10 +58,10 @@ export default function ClashPage() {
             </div>
             <h1 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, fontSize: 28, margin: '16px 0 10px', color: '#1D1D1F' }}>NECROCLASH is for account managers.</h1>
             <p style={{ fontSize: 15, lineHeight: 1.7, color: '#5A5A63', margin: '0 0 20px' }}>
-              Partner stores should stay in Reactivation Arcade. If you are an account manager, enter through the landing page to unlock this view.
+              Partner stores should stay in Store Reactivation. If you are an account manager, enter through the landing page to unlock this view.
             </p>
             <button onClick={() => router.push('/arcade')} style={{ background: '#1D1D1F', color: '#FFC244', border: 'none', borderRadius: 999, padding: '12px 18px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-              Open Reactivation Arcade
+              Open Store Reactivation
             </button>
           </div>
         </div>

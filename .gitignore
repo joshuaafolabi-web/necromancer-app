@@ -2,3 +2,13 @@ node_modules
 .next
 .env.local
 data/partners.local.json.bak
+
+# Local Netlify folder
+.netlify
+
+# Local Blobs fallback used only when NODE_ENV != production and Netlify
+# Blobs is unavailable (i.e. plain `next dev`). See lib/blobStore.ts.
+.necromancer-dev-store.json
+
+# TypeScript incremental build cache — machine-local, regenerated on build.
+tsconfig.tsbuildinfo
