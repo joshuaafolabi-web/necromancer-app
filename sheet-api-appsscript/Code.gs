@@ -185,7 +185,7 @@ function notifyAccountManager_(partnerObj, orders) {
   if (!amEmail) return { sent: false, reason: 'no am_email on this partner' };
 
   var storeName = String(partnerObj.store_name || 'A partner store');
-  var subject = '[Necromancer] ' + storeName + ' accepted the 30-day challenge';
+  var subject = '[Project Lazarus] ' + storeName + ' accepted the 30-day challenge';
   var body =
     storeName + ' has just accepted the 30-day Reactivation Challenge.\n\n' +
     'SAID:              ' + normalizeSaid_(partnerObj.said) + '\n' +

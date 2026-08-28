@@ -176,11 +176,12 @@ function notifyMilestones_(row, rowIndex, headers, said, orders, storeName, netl
   var link = netlifyBaseUrl + '/arcade?said=' + said;
   var labelLines = newlyCrossed.map(function (m) { return '- ' + m.label; }).join('\n');
   var subject = newlyCrossed.length === 1
-    ? '[Necromancer] New spin unlocked — ' + newlyCrossed[0].label
-    : '[Necromancer] ' + newlyCrossed.length + ' new spins unlocked';
+    ? '[Project Lazarus] New spin unlocked — ' + newlyCrossed[0].label
+    : '[Project Lazarus] ' + newlyCrossed.length + ' new spins unlocked';
   var body =
     (storeName || 'Hi') + ',\n\n' +
-    'You just crossed ' + orders + ' orders delivered and unlocked:\n' + labelLines + '\n\n' +
+    'Your revival continues — you just crossed ' + orders + ' orders delivered and unlocked:\n' +
+    labelLines + '\n\n' +
     'Spin now: ' + link + '\n\n' +
     '— Glovo Nigeria';
 
@@ -346,6 +347,11 @@ function pullEvents() {
 // ---------------------------------------------------------------------------
 // Triggers
 // ---------------------------------------------------------------------------
+// Function name kept as-is despite the Project Lazarus rename (2026-08-28)
+// — if a daily trigger is already installed pointing at this exact name,
+// renaming it would break that trigger silently until someone reruns this
+// function under its new name. Not worth that risk for an internal
+// identifier nobody but you ever sees.
 function installNecromancerTriggers() {
   // Clear ours first so re-running this doesn't stack duplicate triggers.
   var removed = 0;
@@ -378,7 +384,7 @@ function syncStatus() {
   var triggers = ScriptApp.getProjectTriggers().filter(function (t) {
     return t.getHandlerFunction() === 'pushPartners' || t.getHandlerFunction() === 'pullEvents';
   });
-  out.push(triggers.length + ' Necromancer trigger(s) installed' +
+  out.push(triggers.length + ' Project Lazarus trigger(s) installed' +
            (triggers.length ? '' : ' — run installNecromancerTriggers()'));
 
   try {

@@ -1,8 +1,21 @@
+<!--
+  Arcade.html — Project Lazarus, kept for reference only.
+
+  NOT SERVED ANYWHERE. This Apps Script project (sheet-api-appsscript) has
+  no doGet/doPost and is never deployed as a web app — the real partner
+  Arcade is the Next.js app on Netlify. This file also calls two server
+  functions, arcadeLookup() and arcadeSpin(), that don't exist in this
+  project's current Code.gs (that logic moved to necromancer-app/lib
+  entirely) — so even if it somehow got served, it wouldn't work. It's
+  themed to Project Lazarus (2026-08-28) purely so the reference stays
+  visually consistent with the rest of the pilot, not because it's live.
+-->
 <!DOCTYPE html>
 <html>
 <head>
   <base target="_top">
   <meta charset="utf-8">
+  <title>Project Lazarus — Glovo Nigeria</title>
   <style>
     /* PRD Section 10 tokens: Glovo Yellow #FFC244, Glovo Green #00A082,
        pill buttons, 16px card radius. System font stack rather than a
@@ -44,15 +57,15 @@
 <div id="loginView" class="wrap" style="padding-top:60px">
   <div class="card" style="border-radius:24px;padding:28px 24px;box-shadow:0 24px 60px rgba(0,0,0,.1);margin:0 16px">
     <div style="width:52px;height:52px;border-radius:16px;background:#FFF7E3;display:flex;
-                align-items:center;justify-content:center;font-size:24px;margin-bottom:20px">☠</div>
-    <h2 style="font-weight:800;font-size:21px;margin:0 0 6px">Reawaken your store</h2>
+                align-items:center;justify-content:center;font-size:24px;margin-bottom:20px">🌅</div>
+    <h2 style="font-weight:800;font-size:21px;margin:0 0 6px">Rise again.</h2>
     <p style="font-size:13px;color:#8E8E93;line-height:1.5;margin:0 0 22px">
       Enter your 6-digit Store Address ID (SAID) to check your Ads Credit and spin the wheel.
     </p>
     <input id="saidInput" class="mono" maxlength="6" placeholder="000000"
            inputmode="numeric" pattern="[0-9]*" autocomplete="off">
     <div id="loginErr" class="err hide"></div>
-    <button id="loginBtn" class="btn btn-primary" style="margin-top:16px">Unlock my Arcade</button>
+    <button id="loginBtn" class="btn btn-primary" style="margin-top:16px">Begin the revival</button>
   </div>
 </div>
 
@@ -64,7 +77,7 @@
   </div>
 
   <div style="padding:18px 18px 4px">
-    <div class="lbl mono">Reactivation Arcade</div>
+    <div class="lbl mono">Project Lazarus</div>
     <h1 id="storeName" style="font-weight:800;font-size:21px;margin:2px 0 0"></h1>
   </div>
 
@@ -131,7 +144,7 @@
     </div>
   </div>
 
-  <div style="text-align:center;font-size:10px;color:#C7C7CC;padding:8px 0 16px">Necromancer Pilot · Glovo Nigeria</div>
+  <div style="text-align:center;font-size:10px;color:#C7C7CC;padding:8px 0 16px">Project Lazarus · Glovo Nigeria</div>
   <div style="padding:0 18px">
     <button id="logoutBtn" class="btn" style="background:transparent;border:1px solid #E5E5EA;
             font-size:12.5px;font-weight:600;color:#8E8E93">Log out</button>
@@ -200,7 +213,7 @@ function drawWheel(labels){
   svg += '<circle cx="140" cy="140" r="29" fill="white"/>';
   svg += '<circle cx="140" cy="140" r="26" fill="#FFC244"/>';
   svg += '<ellipse cx="136" cy="134" rx="10" ry="6" fill="rgba(255,255,255,0.35)"/>';
-  svg += '<text x="140" y="141" text-anchor="middle" dominant-baseline="middle" font-size="16" fill="white">☠</text>';
+  svg += '<text x="140" y="141" text-anchor="middle" dominant-baseline="middle" font-size="16" fill="white">🌅</text>';
   $('wheelSvg').innerHTML = svg;
 }
 
@@ -299,7 +312,7 @@ function login(){
   google.script.run
     .withSuccessHandler(function(res){
       $('loginBtn').disabled = false;
-      $('loginBtn').textContent = 'Unlock my Arcade';
+      $('loginBtn').textContent = 'Begin the revival';
       if (res.error) { showError($('loginErr'), res.error === 'SAID not found'
         ? 'We couldn’t find that SAID. Check the code with your Account Manager.' : res.error); return; }
       state = res;
@@ -310,7 +323,7 @@ function login(){
     })
     .withFailureHandler(function(err){
       $('loginBtn').disabled = false;
-      $('loginBtn').textContent = 'Unlock my Arcade';
+      $('loginBtn').textContent = 'Begin the revival';
       showError($('loginErr'), 'Connection problem. Check your internet and try again.');
     })
     .arcadeLookup(said);
