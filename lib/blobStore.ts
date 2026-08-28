@@ -119,7 +119,23 @@ function wrapNetlifyStore(s: ReturnType<typeof getStore>): Backend {
   return {
     get: (key, opts) => s.get(key, opts as { type: 'json' }),
     setJSON: (key, value) => s.setJSON(key, value),
-    set: (key, value, opts) => s.set(key, value, opts),
+    // @netlify/blobs 8.2.0 has no conditional-write primitive — SetOptions
+    // only accepts `metadata`, and Store.set() returns void, not a result
+    // object. `onlyIfNew` is therefore enforced here as a get-then-set
+    // check, mirroring what claimSpin() one level up already does before
+    // calling this. That narrows the race window but can't close it: two
+    // requests landing inside this get/set gap can still both "win". Fine
+    // for a pilot where a double-claim means one partner double-tapping
+    // their own spin button — but it is a real, documented gap, not a
+    // solved one, if this ever needs a stronger guarantee than that.
+    async set(key, value, opts) {
+      if (opts?.onlyIfNew) {
+        const existing = await s.get(key);
+        if (existing !== null && existing !== undefined) return { modified: false };
+      }
+      await s.set(key, value);
+      return { modified: true };
+    },
     delete: (key) => s.delete(key),
     list: (opts) => s.list(opts),
   };
