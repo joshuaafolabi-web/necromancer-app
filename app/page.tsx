@@ -50,7 +50,7 @@ export default function Home() {
         {/* Hero */}
         <div style={{ maxWidth: 720, marginBottom: 34 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 999, background: '#1D1D1F', color: '#FFC244', fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
-            30-day business growth
+            30-day business growth initiative
           </div>
           <h1 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, fontSize: 'clamp(30px, 6vw, 50px)', margin: '18px 0 14px', lineHeight: 1.08 }}>
             More orders. Free rewards. Simple.
