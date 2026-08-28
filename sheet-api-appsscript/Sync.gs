@@ -11,6 +11,11 @@
  * apply to outbound fetches or time-driven triggers.
  *
  * WHAT IT DOES
+ *   automatedPreflight()  daily, before the push — runs preflight() and
+ *                   emails OPS_ALERT_EMAIL (or you, the script owner, if
+ *                   that's not set) ONLY when it finds a problem. Silent
+ *                   when the Sheet is healthy — this is an alert, not a
+ *                   status report you'd have to read every day.
  *   pushPartners()  daily, after your 6am refresh — sends the Partners tab
  *                   to Netlify so the Arcade can look partners up.
  *   pullEvents()    every 15 min — collects spins and challenge acceptances
@@ -19,6 +24,11 @@
  *                   about new acceptances. Then acknowledges them so they
  *                   are not delivered twice.
  *
+ * All three are installed by ONE call — installNecromancerTriggers() — so
+ * once that's run, nothing here needs a human to open the editor and click
+ * Run again. preflight() itself stays manual-only for ad hoc checks; this
+ * doesn't change what running it by hand does.
+ *
  * INSTALL
  *   1. In your Sheet: Extensions > Apps Script.
  *   2. Add this file alongside Code.gs.
@@ -26,6 +36,9 @@
  *        NETLIFY_BASE_URL   https://your-site.netlify.app   (no trailing slash)
  *        SYNC_API_KEY       a long random string; the same value goes into
  *                           Netlify as SYNC_API_KEY
+ *      Optional third property:
+ *        OPS_ALERT_EMAIL    where preflight problem alerts go. Defaults to
+ *                           your own account (the script owner) if unset.
  *   4. Run installNecromancerTriggers() once. Authorize when prompted —
  *      it asks for outbound fetch, Sheet access, and send-email.
  *   5. Run pushPartners() manually to seed Netlify immediately, then
@@ -33,6 +46,8 @@
  */
 
 var PUSH_HOUR = 7;          // after the 6am refresh; widen if yours runs late
+var PREFLIGHT_HOUR = 6;     // before PUSH_HOUR — problems surface with time
+                             // to fix them before that day's push goes out
 var PULL_MINUTES = 15;      // how quickly spins land back in the Sheet
 var MAX_EVENTS_PER_PULL = 200;
 
@@ -345,29 +360,78 @@ function pullEvents() {
 }
 
 // ---------------------------------------------------------------------------
+// Automated preflight — a scheduled wrapper around the manual preflight()
+// in Code.gs. Doesn't change what preflight() itself does; just decides
+// whether anyone needs to hear about the result.
+// ---------------------------------------------------------------------------
+function alertEmail_() {
+  var prop = PropertiesService.getScriptProperties().getProperty('OPS_ALERT_EMAIL');
+  if (prop && prop.trim()) return prop.trim();
+  // Falls back to whoever owns/last-authorized this script, so alerts have
+  // somewhere to go even before OPS_ALERT_EMAIL is deliberately set.
+  try {
+    return Session.getEffectiveUser().getEmail() || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+/**
+ * Runs preflight() and emails the result ONLY when it finds a problem —
+ * silent on a healthy Sheet, so this is an alert worth reading every time
+ * it arrives, not a daily status report that trains you to ignore it.
+ */
+function automatedPreflight() {
+  var report = preflight();
+  if (report.indexOf('FAILED') !== 0) {
+    Logger.log('automatedPreflight: all checks passed, no alert sent.');
+    return report;
+  }
+
+  var to = alertEmail_();
+  if (!to) {
+    Logger.log('automatedPreflight: found problems but has no address to alert — ' +
+               'set OPS_ALERT_EMAIL in Script Properties.\n' + report);
+    return report;
+  }
+
+  try {
+    MailApp.sendEmail(to, '[Project Lazarus] preflight found a problem', report);
+  } catch (err) {
+    Logger.log('automatedPreflight: could not send alert — ' +
+               (err && err.message ? err.message : err) + '\n' + report);
+  }
+  return report;
+}
+
+// ---------------------------------------------------------------------------
 // Triggers
 // ---------------------------------------------------------------------------
-// Function name kept as-is despite the Project Lazarus rename (2026-08-28)
-// — if a daily trigger is already installed pointing at this exact name,
-// renaming it would break that trigger silently until someone reruns this
-// function under its new name. Not worth that risk for an internal
-// identifier nobody but you ever sees.
+var AUTOMATED_HANDLERS_ = ['automatedPreflight', 'pushPartners', 'pullEvents'];
+
+// Function name kept as installNecromancerTriggers despite the Project
+// Lazarus rename (2026-08-28) — if a daily trigger is already installed
+// pointing at this exact name, renaming it would break that trigger
+// silently until someone reruns this function under its new name. Not
+// worth that risk for an internal identifier nobody but you ever sees.
 function installNecromancerTriggers() {
   // Clear ours first so re-running this doesn't stack duplicate triggers.
   var removed = 0;
   ScriptApp.getProjectTriggers().forEach(function (t) {
-    var fn = t.getHandlerFunction();
-    if (fn === 'pushPartners' || fn === 'pullEvents') {
+    if (AUTOMATED_HANDLERS_.indexOf(t.getHandlerFunction()) >= 0) {
       ScriptApp.deleteTrigger(t);
       removed++;
     }
   });
 
+  ScriptApp.newTrigger('automatedPreflight').timeBased().everyDays(1).atHour(PREFLIGHT_HOUR).create();
   ScriptApp.newTrigger('pushPartners').timeBased().everyDays(1).atHour(PUSH_HOUR).create();
   ScriptApp.newTrigger('pullEvents').timeBased().everyMinutes(PULL_MINUTES).create();
 
-  var msg = 'Triggers installed (removed ' + removed + ' old): pushPartners daily ~' +
-            PUSH_HOUR + ':00 Africa/Lagos, pullEvents every ' + PULL_MINUTES + ' min.';
+  var msg = 'Triggers installed (removed ' + removed + ' old): automatedPreflight daily ~' +
+            PREFLIGHT_HOUR + ':00, pushPartners daily ~' + PUSH_HOUR +
+            ':00, pullEvents every ' + PULL_MINUTES + ' min (all Africa/Lagos). ' +
+            'Nothing here needs to be run by hand again.';
   Logger.log(msg);
   return msg;
 }
@@ -380,12 +444,14 @@ function syncStatus() {
   } catch (err) {
     out.push('CONFIG PROBLEM: ' + err.message);
   }
+  out.push('OPS_ALERT_EMAIL: ' + (alertEmail_() || '(none resolvable — preflight alerts have nowhere to go)'));
 
-  var triggers = ScriptApp.getProjectTriggers().filter(function (t) {
-    return t.getHandlerFunction() === 'pushPartners' || t.getHandlerFunction() === 'pullEvents';
-  });
-  out.push(triggers.length + ' Project Lazarus trigger(s) installed' +
-           (triggers.length ? '' : ' — run installNecromancerTriggers()'));
+  var installedHandlers = {};
+  ScriptApp.getProjectTriggers().forEach(function (t) { installedHandlers[t.getHandlerFunction()] = true; });
+  var missing = AUTOMATED_HANDLERS_.filter(function (h) { return !installedHandlers[h]; });
+  out.push(missing.length
+    ? 'Missing trigger(s): ' + missing.join(', ') + ' — run installNecromancerTriggers()'
+    : 'All 3 Project Lazarus triggers installed (automatedPreflight, pushPartners, pullEvents).');
 
   try {
     var pending = syncFetch_('/api/sync/events', { method: 'get' });
