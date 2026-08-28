@@ -1,5 +1,12 @@
 /**
- * Code.gs — standalone NECROCLASH Web App for Account Managers.
+ * Code.gs — standalone The Lazarus League Web App for Account Managers.
+ *
+ * Formerly NECROCLASH — renamed as part of the Project Lazarus rebrand
+ * (2026-08-28). The `action=necroclash` query parameter in doGet() below is
+ * kept unchanged on purpose: the live Netlify /clash page hardcodes that
+ * exact string (necromancer-app/lib/appsScript.ts), and that app is out of
+ * scope for this rebrand — renaming the wire value here without also
+ * changing that file would silently break a working integration.
  *
  * This is a SEPARATE Apps Script project from sheet-api-appsscript/ — it is
  * not bound to the Sheet, so it opens it by ID instead. That's the only
@@ -15,8 +22,8 @@
  *   4. Project Settings (gear icon) > Script Properties > add a property
  *      named SHEET_ID with the value being your Google Sheet's ID (the
  *      long string in its URL between /d/ and /edit).
- *   5. Run preflightNecroclash() from the editor. It confirms the SHEET_ID
- *      resolves and the tabs/headers are readable before you deploy.
+ *   5. Run preflightLazarusLeague() from the editor. It confirms the
+ *      SHEET_ID resolves and the tabs/headers are readable before you deploy.
  *   6. Deploy > New deployment > Web app.
  *      - Execute as: Me
  *      - Who has access: Anyone within [your domain]   <-- use this, not "Anyone"
@@ -29,10 +36,10 @@
  *      Workspace SSO the PRD asks for (Section 9) without touching IAM.
  *   7. Authorize when prompted — it's asking permission to read the Sheet
  *      you're about to point it at by ID, which you already own.
- *   8. Copy the Web app URL. That's the NECROCLASH link you send to AMs.
+ *   8. Copy the Web app URL. That's the Lazarus League link you send to AMs.
  *
- * Uses the SAME Sheet as the Reactivation Arcade (Partners + AMs tabs).
- * SpinLog isn't needed here — NECROCLASH only reads Partners and AMs.
+ * Uses the SAME Sheet as the partner Arcade (Partners + AMs tabs). SpinLog
+ * isn't needed here — this only reads Partners and AMs.
  *
  * NOTE ON THE AMs TAB. The live sheet carries EP, reactivations and rank
  * columns. This code IGNORES them and recomputes all three from the
@@ -90,8 +97,8 @@ function getSpreadsheet_() {
 }
 
 // ---------------------------------------------------------------------------
-// Scoring constants — NECROCLASH's own AM-competition rubric (EP, rank
-// tiers). Independent of the Arcade's prize milestones in
+// Scoring constants — The Lazarus League's own AM-competition rubric (EP,
+// rank tiers). Independent of the Arcade's prize milestones in
 // necromancer-app/lib/gameRules.ts — that table decides what a PARTNER wins
 // on the wheel; this one decides how an AM's effort is scored. The two
 // diverged on 2026-08-27 when the Arcade moved to fixed order-count
@@ -107,11 +114,17 @@ var CREDIT_STEPS = [
 // whitespace trimmed, because these are typed into a Sheet by hand and
 // "tier 2 " scoring 0 EP is a silent, invisible failure.
 var SEGMENT_BASE_POINTS = { 'tier 1': 30, 'tier 2': 100, 'tier 3': 70, 'tier 4': 50 };
-var SEGMENT_DISPLAY = { 'tier 1': 'Sleeper', 'tier 2': 'Leviathan', 'tier 3': 'Wanderer', 'tier 4': 'Wraith' };
+// Partner tier display names, Project Lazarus (2026-08-28). Tier 1/3 kept
+// their prior names (Sleeper/Wanderer already fit either theme); Tier 2 and
+// 4 swapped the dark-fantasy names for ones that fit a revival story.
+var SEGMENT_DISPLAY = { 'tier 1': 'The Resting', 'tier 2': 'Fallen Giants', 'tier 3': 'The Slumbering', 'tier 4': 'The Entombed' };
 var CREDIT_MULTIPLIER = { 0: 0, 5000: 1.0, 10000: 1.5, 12500: 2.0, 15000: 2.5, 20000: 3.0, 25000: 4.0 };
+// AM rank titles, ascending by EP. Colors in Dashboard.html's RANK_COLOR
+// stay mapped by POSITION (gray/teal/purple/gold, lowest to highest), not
+// by name, so the visual hierarchy carries over unchanged.
 var RANK_TIERS = [
-  { rank: 'Bonecaller', minEp: 0 }, { rank: 'Wraithbinder', minEp: 500 },
-  { rank: 'Soulforger', minEp: 1200 }, { rank: 'Archnecromancer', minEp: 2400 },
+  { rank: 'Awakener', minEp: 0 }, { rank: 'Restorer', minEp: 500 },
+  { rank: 'Miracle Worker', minEp: 1200 }, { rank: 'Prime Resurrector', minEp: 2400 },
 ];
 
 function normalizeHeader_(h) {
@@ -321,7 +334,7 @@ function buildLeaderboard_(ss) {
   return rows;
 }
 
-function getNecroclashData_(selfEmail) {
+function getLazarusLeagueData_(selfEmail) {
   var ss = getSpreadsheet_();
   var leaderboard = buildLeaderboard_(ss);
 
@@ -341,7 +354,7 @@ function getNecroclashData_(selfEmail) {
   var week = weekIndex_();
   var matchups = buildMatchups_(leaderboard.map(function (r) { return r.amEmail; }), week);
 
-  // ---- Soul Duel ----
+  // ---- The Trial of Awakening (formerly Soul Duel) ----
   var rivalEmail = matchups.duelOpponent[self.amEmail];
   var rival = rivalEmail ? byEmail[rivalEmail] : null;
   // Bars are scaled against the pair's own leader, so a duel between two
@@ -356,11 +369,14 @@ function getNecroclashData_(selfEmail) {
     weekStart: weekStart_(),
   };
 
-  // ---- Coven Clash ----
+  // ---- The Stone-Roller Raid (formerly Coven Clash) ----
   var partners = readTab_(ss, 'Partners');
   var myCoven = matchups.coven[self.amEmail] || { mate: null, rivals: [] };
 
-  function lowestLeviathan(emails) {
+  // "Fallen Giants" is Tier 2's Project Lazarus display name (was
+  // "Leviathan") — this still targets Tier 2 specifically, the raid's
+  // target tier hasn't changed, just what it's called.
+  function lowestFallenGiant(emails) {
     var pool = partners.filter(function (p) {
       return normalizeSegment_(p.tier) === 'tier 2' &&
              emails.indexOf(normalizeEmail_(p.am_email)) >= 0;
@@ -372,8 +388,8 @@ function getNecroclashData_(selfEmail) {
   }
 
   var covenEmails = [self.amEmail, myCoven.mate].filter(Boolean);
-  var boss = lowestLeviathan(covenEmails);
-  var rivalBoss = lowestLeviathan(myCoven.rivals);
+  var boss = lowestFallenGiant(covenEmails);
+  var rivalBoss = lowestFallenGiant(myCoven.rivals);
 
   var coven = {
     mate: myCoven.mate && byEmail[myCoven.mate] ? byEmail[myCoven.mate].amName : null,
@@ -387,7 +403,7 @@ function getNecroclashData_(selfEmail) {
   };
 
   // ---- Weekly quest ----
-  var myLeviathansReactivated = partners.filter(function (p) {
+  var myFallenGiantsReactivated = partners.filter(function (p) {
     return normalizeEmail_(p.am_email) === self.amEmail &&
            normalizeSegment_(p.tier) === 'tier 2' &&
            creditForOrders_(Number(p.orders_delivered) || 0) > 0;
@@ -400,10 +416,10 @@ function getNecroclashData_(selfEmail) {
     duel: duel,
     coven: coven,
     quest: {
-      text: 'Reactivate 2 Leviathans this week',
-      progress: Math.min(myLeviathansReactivated, 2),
+      text: 'Reactivate 2 Fallen Giants this week',
+      progress: Math.min(myFallenGiantsReactivated, 2),
       target: 2,
-      complete: myLeviathansReactivated >= 2,
+      complete: myFallenGiantsReactivated >= 2,
     },
   };
 }
@@ -446,7 +462,7 @@ function doGet(e) {
   if (params.action === 'necroclash') {
     var payload;
     try {
-      payload = getNecroclashData_(params.am || '');
+      payload = getLazarusLeagueData_(params.am || '');
     } catch (err) {
       payload = { error: String(err && err.message ? err.message : err) };
     }
@@ -463,7 +479,7 @@ function doGet(e) {
 
   return HtmlService.createTemplateFromFile('Dashboard')
     .evaluate()
-    .setTitle('NECROCLASH — Glovo Nigeria')
+    .setTitle('The Lazarus League — Glovo Nigeria')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
@@ -487,18 +503,18 @@ function getAmList() {
     .map(function (a) { return { am_name: a.am_name || a.am_email, am_email: normalizeEmail_(a.am_email) }; });
 }
 
-function getNecroclashJson(selfEmail) {
+function getLazarusLeagueJson(selfEmail) {
   try {
-    return getNecroclashData_(selfEmail);
+    return getLazarusLeagueData_(selfEmail);
   } catch (err) {
     return { error: String(err && err.message ? err.message : err) };
   }
 }
 
 // ---------------------------------------------------------------------------
-// preflightNecroclash() — run from the editor before deploying.
+// preflightLazarusLeague() — run from the editor before deploying.
 // ---------------------------------------------------------------------------
-function preflightNecroclash() {
+function preflightLazarusLeague() {
   var out = [];
   try {
     var ss = getSpreadsheet_();

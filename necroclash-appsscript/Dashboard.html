@@ -3,6 +3,7 @@
 <head>
   <base target="_top">
   <meta charset="utf-8">
+  <title>The Lazarus League — Glovo Nigeria</title>
   <style>
     /* PRD Section 10 tokens. System font stack rather than a Google Fonts
        request — one less blocking third-party load on an internal tool. */
@@ -22,7 +23,7 @@
   <div class="wrap">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;flex-wrap:wrap">
       <div>
-        <div class="mono" style="font-size:10.5px;font-weight:600;color:#8E8E93;text-transform:uppercase;letter-spacing:.08em">NECROCLASH</div>
+        <div class="mono" style="font-size:10.5px;font-weight:600;color:#8E8E93;text-transform:uppercase;letter-spacing:.08em">The Lazarus League</div>
         <h1 id="selfName" style="font-weight:800;font-size:22px;margin:2px 0 0">Loading…</h1>
         <div id="weekLabel" style="font-size:11px;color:#8E8E93;margin-top:3px"></div>
       </div>
@@ -31,11 +32,13 @@
         <div id="identityNote" style="font-size:10px;color:#8E8E93;margin-top:5px"></div>
       </div>
     </div>
-    <div id="content"><div class="empty">Loading NECROCLASH…</div></div>
+    <div id="content"><div class="empty">Loading The Lazarus League…</div></div>
   </div>
 
   <script>
-    var RANK_COLOR = { Archnecromancer:'#B8860B', Soulforger:'#6D28D9', Wraithbinder:'#00A082', Bonecaller:'#9CA3AF' };
+    // Colors kept mapped by rank POSITION (lowest to highest), matching
+    // RANK_TIERS in Code.gs — gray, teal, purple, gold.
+    var RANK_COLOR = { 'Prime Resurrector':'#B8860B', 'Miracle Worker':'#6D28D9', Restorer:'#00A082', Awakener:'#9CA3AF' };
 
     // Store and AM names come from a hand-edited Sheet and were previously
     // concatenated straight into innerHTML. A name containing & or < broke
@@ -82,14 +85,14 @@
     }
 
     function fail(err){
-      $('content').innerHTML = '<div class="empty">Couldn’t load NECROCLASH.<br>' +
+      $('content').innerHTML = '<div class="empty">Couldn’t load The Lazarus League.<br>' +
         esc(err && err.message ? err.message : err) + '</div>';
     }
 
     function loadFor(email){
       $('amSelect').value = email;
       $('content').innerHTML = '<div class="empty">Loading…</div>';
-      google.script.run.withSuccessHandler(render).withFailureHandler(fail).getNecroclashJson(email);
+      google.script.run.withSuccessHandler(render).withFailureHandler(fail).getLazarusLeagueJson(email);
     }
 
     function render(data){
@@ -103,9 +106,9 @@
       html += '<div class="cols" style="display:grid;grid-template-columns:2fr 1fr;gap:18px;align-items:start">';
       html += '<div style="display:flex;flex-direction:column;gap:18px">';
 
-      // ---- Soul Duel ----
+      // ---- The Trial of Awakening (formerly Soul Duel) ----
       html += '<div class="card" style="overflow:hidden">';
-      html += '<div style="padding:16px 24px;border-bottom:1px solid rgba(0,0,0,.05)"><div style="font-weight:800;font-size:14px">Soul Duel</div><div style="font-size:11px;color:#8E8E93;margin-top:2px">Weekly 1v1 — higher EP by week end wins</div></div>';
+      html += '<div style="padding:16px 24px;border-bottom:1px solid rgba(0,0,0,.05)"><div style="font-weight:800;font-size:14px">The Trial of Awakening</div><div style="font-size:11px;color:#8E8E93;margin-top:2px">Weekly 1v1 — higher EP by week end wins</div></div>';
       if (duel.rival) {
         html += '<div style="padding:22px 24px;display:grid;grid-template-columns:1fr 1fr;gap:16px">';
         html += duelCard(self.amName, self.rank, duel.selfPct, duel.selfLeading, duel.rivalPct, '#FFC244');
@@ -116,21 +119,21 @@
       }
       html += '</div>';
 
-      // ---- Coven Clash ----
+      // ---- The Stone-Roller Raid (formerly Coven Clash) ----
       html += '<div class="card" style="overflow:hidden">';
-      html += '<div style="padding:16px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(0,0,0,.05)"><div><div style="font-weight:800;font-size:14px">Coven Clash</div><div style="font-size:11px;color:#8E8E93;margin-top:2px">First to 100% claims the target</div></div><div style="background:#FEF2F2;color:#DC2626;border-radius:8px;padding:5px 10px;font-size:10px;font-weight:700">Reckoning</div></div>';
+      html += '<div style="padding:16px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(0,0,0,.05)"><div><div style="font-weight:800;font-size:14px">The Stone-Roller Raid</div><div style="font-size:11px;color:#8E8E93;margin-top:2px">First to 100% claims the target</div></div><div style="background:#FEF2F2;color:#DC2626;border-radius:8px;padding:5px 10px;font-size:10px;font-weight:700">Rolling</div></div>';
       html += '<div style="padding:22px 24px">';
       if (coven.boss) {
         html += '<div style="display:flex;align-items:center;gap:16px;background:#FAFAFA;border-radius:14px;padding:12px;margin-bottom:18px">';
-        html += '<div style="width:64px;height:64px;border-radius:16px;background:#FEF9EC;border:1px solid rgba(255,194,68,.2);display:flex;align-items:center;justify-content:center;font-size:28px">🍢</div>';
+        html += '<div style="width:64px;height:64px;border-radius:16px;background:#FEF9EC;border:1px solid rgba(255,194,68,.2);display:flex;align-items:center;justify-content:center;font-size:28px">🪨</div>';
         html += '<div style="flex:1"><div style="font-weight:800;font-size:14.5px">'+esc(coven.boss.name)+'</div><div style="font-size:11px;color:#8E8E93;margin-top:3px">'+esc(coven.boss.segmentLabel)+'</div></div></div>';
       } else {
-        html += '<div style="font-size:12px;color:#8E8E93;margin-bottom:18px">No Tier 2 (Leviathan) partner assigned to your Coven this week — nothing to raid.</div>';
+        html += '<div style="font-size:12px;color:#8E8E93;margin-bottom:18px">No Tier 2 (Fallen Giant) partner assigned to your Stone-Rollers this week — nothing to raid.</div>';
       }
       var myPct = coven.boss ? coven.boss.progressPct : 0;
       html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">';
       html += '<div style="border-radius:14px;padding:14px;background:#F0FDF9;border:1.5px solid rgba(0,160,130,.2)">';
-      html += '<div style="font-size:10.5px;font-weight:700;color:#00A082;margin-bottom:10px">Your Coven'+(coven.mate?' — with '+esc(coven.mate):' (solo this week)')+'</div>';
+      html += '<div style="font-size:10.5px;font-weight:700;color:#00A082;margin-bottom:10px">Your Stone-Rollers'+(coven.mate?' — with '+esc(coven.mate):' (solo this week)')+'</div>';
       html += '<div style="display:flex;justify-content:space-between;font-size:10px;color:#00A082;margin-bottom:5px"><span>Progress</span><span style="font-weight:700">'+myPct+'%</span></div>';
       html += '<div class="bar" style="background:rgba(0,160,130,.12)"><div style="width:'+myPct+'%;height:100%;background:#00A082"></div></div></div>';
       html += '<div style="border-radius:14px;padding:14px;background:#FAFAFA;border:1px solid rgba(0,0,0,.05)">';
@@ -181,9 +184,9 @@
 
       html += '</div>'; // end grid
 
-      // ---- Bone Throne ----
+      // ---- The Hall of Miracles (formerly Bone Throne) ----
       html += '<div style="margin-top:24px;border-radius:20px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.1)">';
-      html += '<div style="background:#111827;padding:20px 24px"><div class="mono" style="font-size:10px;font-weight:800;color:#FFC244;text-transform:uppercase;letter-spacing:.25em;margin-bottom:8px">The Bone Throne</div><div style="font-weight:800;font-size:20px;color:#fff">'+(board[0]?esc(board[0].amName)+' holds the Throne — '+board[0].ep+' EP':'No contenders yet')+'</div></div>';
+      html += '<div style="background:#111827;padding:20px 24px"><div class="mono" style="font-size:10px;font-weight:800;color:#FFC244;text-transform:uppercase;letter-spacing:.25em;margin-bottom:8px">The Hall of Miracles</div><div style="font-weight:800;font-size:20px;color:#fff">'+(board[0]?esc(board[0].amName)+' leads the Hall — '+board[0].ep+' EP':'No contenders yet')+'</div></div>';
       html += '<div style="background:#111827">';
       html += '<div class="board-head" style="display:grid;grid-template-columns:44px 1fr 160px 90px 90px;padding:12px 24px;font-size:9px;font-weight:700;color:#4B5563;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid rgba(255,255,255,.04)"><div>#</div><div>Account Manager</div><div>Rank</div><div class="col-react" style="text-align:right">Reactivations</div><div style="text-align:right">EP</div></div>';
       board.forEach(function(row, i){
@@ -196,7 +199,7 @@
         html += '<div class="mono" style="text-align:right;font-weight:800;font-size:14px;color:'+(i===0?'#D4AF37':'#9CA3AF')+'">'+row.ep+'</div>';
         html += '</div>';
       });
-      html += '<div style="text-align:center;font-size:10px;color:#374151;padding:18px">Necromancer Pilot · Glovo Nigeria</div>';
+      html += '<div style="text-align:center;font-size:10px;color:#374151;padding:18px">Project Lazarus · Glovo Nigeria</div>';
       html += '</div></div>';
 
       $('content').innerHTML = html;
