@@ -16,6 +16,8 @@
     .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
     .empty{color:#8E8E93;font-size:13px;text-align:center;padding:60px 0;line-height:1.6}
     .bar{height:8px;border-radius:4px;overflow:hidden}
+    @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.35}}
+    .dot{width:6px;height:6px;border-radius:50%;flex:none;animation:pulse-dot 1.6s infinite}
     @media (max-width:820px){ .cols{grid-template-columns:1fr !important} .board-row,.board-head{grid-template-columns:36px 1fr 90px 70px !important} .col-react{display:none} }
   </style>
 </head>
@@ -30,6 +32,7 @@
       <div style="text-align:right">
         <select id="amSelect"></select>
         <div id="identityNote" style="font-size:10px;color:#8E8E93;margin-top:5px"></div>
+        <div id="liveNote" style="font-size:10px;color:#8E8E93;margin-top:3px;display:flex;align-items:center;justify-content:flex-end;gap:5px"></div>
       </div>
     </div>
     <div id="content"><div class="empty">Loading The Lazarus League…</div></div>
@@ -89,10 +92,46 @@
         esc(err && err.message ? err.message : err) + '</div>';
     }
 
+    // ---- Auto-refresh -------------------------------------------------
+    // Data underneath only actually changes when pullEvents() writes back
+    // to the Sheet (every 15 min) or the daily orders refresh runs, so
+    // polling faster than that just burns Apps Script execution quota for
+    // no new information. 2 minutes is frequent enough that an AM watching
+    // the board never has a reason to hit browser-refresh, without being
+    // wasteful.
+    var REFRESH_MS = 120000;
+    var currentEmail = null;
+
     function loadFor(email){
+      currentEmail = email;
       $('amSelect').value = email;
       $('content').innerHTML = '<div class="empty">Loading…</div>';
-      google.script.run.withSuccessHandler(render).withFailureHandler(fail).getLazarusLeagueJson(email);
+      google.script.run.withSuccessHandler(function(data){ render(data); markUpdated(); })
+        .withFailureHandler(fail).getLazarusLeagueJson(email);
+    }
+
+    /**
+     * Same call as loadFor(), but silent: no "Loading…" flash, and a
+     * transient error just skips this cycle rather than blanking out a
+     * dashboard that was working fine a moment ago. This is what runs on
+     * the timer while an AM has the tab open and isn't touching anything.
+     */
+    function silentRefresh(){
+      if (!currentEmail) return;
+      google.script.run
+        .withSuccessHandler(function(data){
+          if (data && data.error) return; // keep last-good state, try again next cycle
+          render(data);
+          markUpdated();
+        })
+        .withFailureHandler(function(){ /* same — last-good state stands */ })
+        .getLazarusLeagueJson(currentEmail);
+    }
+
+    function markUpdated(){
+      var now = new Date();
+      var hh = ('0'+now.getHours()).slice(-2), mm = ('0'+now.getMinutes()).slice(-2);
+      $('liveNote').innerHTML = '<div class="dot" style="background:#00A082"></div>Live · updated ' + hh + ':' + mm;
     }
 
     function render(data){
@@ -225,6 +264,7 @@
 
     $('amSelect').addEventListener('change', function(){ loadFor(this.value); });
     init();
+    setInterval(silentRefresh, REFRESH_MS);
   </script>
 </body>
 </html>
