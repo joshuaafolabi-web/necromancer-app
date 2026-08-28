@@ -202,13 +202,13 @@ function notifyMilestones_(row, rowIndex, headers, said, orders, storeName, netl
 function pushPartners() {
   var tab = readTab_('Partners');
   var col = {
-    said: tab.headers.indexOf('said'),
+    said: saidColumnIndex_(tab.headers),
     name: tab.headers.indexOf('store_name'),
     tier: tab.headers.indexOf('tier'),
     orders: tab.headers.indexOf('orders_delivered'),
   };
   if (col.said < 0 || col.orders < 0) {
-    throw new Error('Partners tab needs at least "said" and "orders_delivered" columns.');
+    throw new Error('Partners tab needs at least "said" (or "store_address_id") and "orders_delivered" columns.');
   }
 
   var ladderStepCol = tab.headers.indexOf('ladderstepreached');

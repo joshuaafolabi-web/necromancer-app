@@ -69,6 +69,21 @@ function isValidSaid_(said) {
 }
 
 /**
+ * The live Sheet's SAID column is actually named "store_address_id" (SAID
+ * = Store Address ID) — every screenshot confirmed this, and none ever
+ * showed a column literally named "said". Checking "said" first keeps this
+ * working if a Sheet ever uses that shorter name instead, but on the real
+ * Sheet it's store_address_id that actually gets found. Every said-column
+ * lookup in this project MUST go through this function, not a bare
+ * headers.indexOf('said') — that silently threw "Partners tab needs at
+ * least 'said'..." against the real Sheet.
+ */
+function saidColumnIndex_(headers) {
+  var i = headers.indexOf('said');
+  return i >= 0 ? i : headers.indexOf('store_address_id');
+}
+
+/**
  * Extracts the tier from a segment label, ignoring decoration. The live
  * sheet writes them as "Tier 4 🌑", "Tier 3 🔴" — an exact-string match
  * rejected all of those, and NECROCLASH would have scored them 0 EP.
@@ -99,8 +114,8 @@ function readTab_(name) {
 
 function findPartnerRow_(said) {
   var tab = readTab_('Partners');
-  var saidCol = tab.headers.indexOf('said');
-  if (saidCol < 0) throw new Error('Partners tab has no "said" column.');
+  var saidCol = saidColumnIndex_(tab.headers);
+  if (saidCol < 0) throw new Error('Partners tab has no "said" or "store_address_id" column.');
 
   for (var i = 0; i < tab.rows.length; i++) {
     if (normalizeSaid_(tab.rows[i][saidCol]) === said) {
@@ -212,7 +227,10 @@ function preflight() {
       var tab = readTab_(name);
       tabs[name] = tab;
       required[name].forEach(function (h) {
-        if (tab.headers.indexOf(h) < 0) {
+        // 'said' accepts the store_address_id alias too — see
+        // saidColumnIndex_'s comment for why the real Sheet needs this.
+        var found = h === 'said' ? saidColumnIndex_(tab.headers) >= 0 : tab.headers.indexOf(h) >= 0;
+        if (!found) {
           problems.push(name + ': missing required header "' + h + '" (found: ' + tab.headers.join(', ') + ')');
         }
       });
@@ -229,7 +247,7 @@ function preflight() {
 
   if (tabs.Partners) {
     var t = tabs.Partners;
-    var saidCol = t.headers.indexOf('said');
+    var saidCol = saidColumnIndex_(t.headers);
     var amCol = t.headers.indexOf('am_email');
     var ordCol = t.headers.indexOf('orders_delivered');
     var segCol = t.headers.indexOf('tier');
