@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <style>
+    /* PRD Section 10 tokens: Glovo Yellow #FFC244, Glovo Green #00A082,
+       pill buttons, 16px card radius. System font stack rather than a
+       Google Fonts request — PRD Section 11 calls out low-end Android
+       tablets on flaky kitchen wifi, and a blocking webfont is the
+       easiest thing to cut. */
+    *{box-sizing:border-box}
+    body{margin:0;background:#F5F5F7;color:#1D1D1F;-webkit-font-smoothing:antialiased;
+         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .wrap{max-width:420px;margin:0 auto;padding:0 0 40px}
+    .card{background:#fff;border-radius:16px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+    .lbl{font-size:10.5px;font-weight:600;color:#8E8E93;text-transform:uppercase;letter-spacing:.08em}
+    button{font-family:inherit}
+    .btn{border:none;border-radius:999px;padding:14px;font-size:14px;font-weight:700;cursor:pointer;width:100%}
+    .btn-primary{background:#1D1D1F;color:#FFC244}
+    .btn-spin{background:#FFC244;color:#1D1D1F;width:auto;padding:13px 40px;font-size:13px;
+              box-shadow:0 4px 16px rgba(255,194,68,.4)}
+    .btn-spin[disabled]{background:#E5E7EB;color:#9CA3AF;box-shadow:none;cursor:default}
+    .err{font-size:12px;color:#DC2626;margin:10px 0 0;line-height:1.4}
+    input{width:100%;border:1.5px solid #E5E5EA;border-radius:12px;padding:14px;font-size:20px;
+          letter-spacing:.2em;text-align:center;outline:none;color:#1D1D1F}
+    input:focus{border-color:#FFC244}
+    @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.35}}
+    .dot{width:7px;height:7px;border-radius:50%;background:#F59E0B;flex:none;animation:pulse-dot 1.6s infinite}
+    #wheelSvg{transition:transform 3.2s cubic-bezier(.15,.85,.25,1)}
+    /* Confetti: PRD Section 8 asks for a celebration moment, Section 11 says
+       keep it CSS/SVG and lightweight. 18 transform-only divs, no library. */
+    @keyframes fall{to{transform:translateY(105vh) rotate(540deg);opacity:0}}
+    .confetti{position:fixed;inset:0;pointer-events:none;z-index:50;overflow:hidden}
+    .confetti i{position:absolute;top:-14px;width:8px;height:13px;border-radius:2px;
+                animation:fall linear forwards;will-change:transform}
+    .hide{display:none}
+  </style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="loginView" class="wrap" style="padding-top:60px">
+  <div class="card" style="border-radius:24px;padding:28px 24px;box-shadow:0 24px 60px rgba(0,0,0,.1);margin:0 16px">
+    <div style="width:52px;height:52px;border-radius:16px;background:#FFF7E3;display:flex;
+                align-items:center;justify-content:center;font-size:24px;margin-bottom:20px">☠</div>
+    <h2 style="font-weight:800;font-size:21px;margin:0 0 6px">Reawaken your store</h2>
+    <p style="font-size:13px;color:#8E8E93;line-height:1.5;margin:0 0 22px">
+      Enter your 6-digit Store Address ID (SAID) to check your Ads Credit and spin the wheel.
+    </p>
+    <input id="saidInput" class="mono" maxlength="6" placeholder="000000"
+           inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+    <div id="loginErr" class="err hide"></div>
+    <button id="loginBtn" class="btn btn-primary" style="margin-top:16px">Unlock my Arcade</button>
+  </div>
+</div>
+
+<!-- Arcade -->
+<div id="arcadeView" class="wrap hide">
+  <div style="padding:14px 14px 0">
+    <div id="goldenHour" style="border-radius:12px;padding:10px 14px;display:flex;align-items:center;gap:9px;
+         background:#fff;border:1px solid rgba(245,158,11,.2);box-shadow:0 1px 4px rgba(0,0,0,.04)"></div>
+  </div>
+
+  <div style="padding:18px 18px 4px">
+    <div class="lbl mono">Reactivation Arcade</div>
+    <h1 id="storeName" style="font-weight:800;font-size:21px;margin:2px 0 0"></h1>
+  </div>
+
+  <!-- Wallet -->
+  <div style="margin:14px 18px 16px">
+    <div style="border-radius:24px;padding:22px;background:linear-gradient(160deg,#FFD584,#FFC244);overflow:hidden">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:rgba(69,26,3,.5);text-transform:uppercase;letter-spacing:.06em">Ads Credit Balance</div>
+          <div id="balance" class="mono" style="font-size:32px;font-weight:800;color:#451A03;margin-top:5px;letter-spacing:-.02em"></div>
+        </div>
+        <div style="width:42px;height:42px;border-radius:14px;background:rgba(255,255,255,.3);display:flex;
+                    align-items:center;justify-content:center;font-size:20px;flex:none">🍽</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:600;color:rgba(69,26,3,.6);margin-bottom:7px">
+        <span id="orderCount"></span><span id="nextTier"></span>
+      </div>
+      <div style="height:6px;border-radius:3px;background:rgba(0,0,0,.12)">
+        <div id="ladderBar" style="height:100%;border-radius:3px;background:rgba(0,0,0,.3);width:0%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ladder -->
+  <div class="card" style="margin:0 18px 16px;padding:20px">
+    <div class="lbl mono" style="margin-bottom:20px">Credit Ladder</div>
+    <div style="position:relative;display:flex;justify-content:space-between">
+      <div style="position:absolute;left:11px;right:11px;top:11px;height:1px;background:#F0F0F2">
+        <div id="ladderTrack" style="height:100%;background:#00A082;width:0%"></div>
+      </div>
+      <div id="ladderSteps" style="display:contents"></div>
+    </div>
+  </div>
+
+  <!-- Wheel -->
+  <div class="card" style="margin:0 18px 16px;padding:20px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+      <div>
+        <div id="wheelTitle" style="font-weight:700;font-size:14px"></div>
+        <div id="wheelSub" style="font-size:11px;color:#8E8E93;margin-top:2px"></div>
+      </div>
+      <div id="wheelBadge" style="background:#FFFBEC;border:1px solid rgba(255,194,68,.3);border-radius:8px;
+           padding:5px 10px;font-size:10px;font-weight:700;color:#B8860B;white-space:nowrap"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:18px">
+      <div style="position:relative;padding-top:10px">
+        <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:0;height:0;
+             border-left:8px solid transparent;border-right:8px solid transparent;
+             border-top:20px solid #FFC244;z-index:2"></div>
+        <svg id="wheelSvg" width="200" height="200" viewBox="0 0 280 280"></svg>
+        <div id="wheelLock" class="hide" style="position:absolute;inset:10px 0 0;border-radius:50%;
+             background:rgba(245,245,247,.94);display:flex;align-items:center;justify-content:center">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#8E8E93;
+               border:1px solid #E5E5EA;border-radius:999px;padding:3px 10px">LOCKED</div>
+        </div>
+      </div>
+      <button id="spinBtn" class="btn btn-spin hide">Spin Now</button>
+      <div id="prizeResult" class="hide" style="text-align:center">
+        <div class="lbl mono">You won</div>
+        <div id="prizeName" style="font-size:17px;font-weight:800;color:#B8860B;margin-top:2px"></div>
+        <div style="font-size:11px;color:#8E8E93;margin-top:3px">Your AM will reach out within 48 hours</div>
+      </div>
+      <div id="arcadeErr" class="err hide" style="text-align:center"></div>
+    </div>
+  </div>
+
+  <div style="text-align:center;font-size:10px;color:#C7C7CC;padding:8px 0 16px">Necromancer Pilot · Glovo Nigeria</div>
+  <div style="padding:0 18px">
+    <button id="logoutBtn" class="btn" style="background:transparent;border:1px solid #E5E5EA;
+            font-size:12.5px;font-weight:600;color:#8E8E93">Log out</button>
+  </div>
+</div>
+
+<script>
+var WEDGE_COLORS = ['#6B7280','#7C3AED','#00A082','#F59E0B','#059669','#374151','#FFC244','#B45309'];
+var state = null, rotation = 0, busy = false;
+
+function $(id){ return document.getElementById(id); }
+function show(el,on){ el.classList[on?'remove':'add']('hide'); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+// ---- Golden Hour -------------------------------------------------------
+// Computed in Africa/Lagos (UTC+1, no DST) from the UTC clock rather than
+// the device clock, so a tablet with the wrong timezone still sees the
+// right window instead of a banner that quietly lies about being live.
+function renderGoldenHour(){
+  var now = new Date();
+  var lagosH = (now.getUTCHours() + 1) % 24;
+  var lagosM = now.getUTCMinutes();
+  var live = lagosH >= 17 && lagosH < 20;
+  var el = $('goldenHour');
+
+  if (live) {
+    var left = (20 - lagosH) * 60 - lagosM;
+    el.style.background = '#fff';
+    el.style.borderColor = 'rgba(245,158,11,.2)';
+    el.innerHTML = '<div class="dot"></div>' +
+      '<div style="font-size:11px;font-weight:600;color:#B45309;flex:1">Golden Hour is live — 2× progress on every order</div>' +
+      '<div class="mono" style="font-size:11px;font-weight:700;color:#D97706">' +
+        Math.floor(left/60) + 'h ' + (left%60) + 'm left</div>';
+  } else {
+    el.style.background = '#FAFAFA';
+    el.style.borderColor = 'rgba(0,0,0,.06)';
+    el.innerHTML = '<div style="width:7px;height:7px;border-radius:50%;background:#C7C7CC;flex:none"></div>' +
+      '<div style="font-size:11px;font-weight:600;color:#8E8E93;flex:1">Golden Hour — 2× progress on every order</div>' +
+      '<div class="mono" style="font-size:11px;font-weight:700;color:#8E8E93">5–8PM daily</div>';
+  }
+}
+
+// ---- Wheel -------------------------------------------------------------
+// Eight EQUAL wedges. The real odds are per-tier and weighted (PRD Section
+// 15), but drawing them to scale would show every partner the odds table
+// that Section 11 says the client must never receive. Equal wedges keep the
+// draw entirely server-side and leak nothing.
+function polar(cx,cy,r,deg){ var a=(deg-90)*Math.PI/180; return {x:cx+r*Math.cos(a),y:cy+r*Math.sin(a)}; }
+
+function drawWheel(labels){
+  var CX=140, CY=140, R=118, n=labels.length, step=360/n, svg='';
+  svg += '<circle cx="140" cy="140" r="125" fill="white"/>';
+  svg += '<circle cx="140" cy="140" r="122" fill="rgba(0,0,0,0.04)"/>';
+  for (var i=0;i<n;i++){
+    var a=i*step, b=a+step, s=polar(CX,CY,R,b), e=polar(CX,CY,R,a), mid=polar(CX,CY,R*0.63,a+step/2);
+    svg += '<path d="M 140 140 L '+s.x.toFixed(2)+' '+s.y.toFixed(2)+
+           ' A '+R+' '+R+' 0 0 0 '+e.x.toFixed(2)+' '+e.y.toFixed(2)+' Z" fill="'+
+           WEDGE_COLORS[i%WEDGE_COLORS.length]+'" stroke="white" stroke-width="2"/>';
+    svg += '<text x="'+mid.x.toFixed(1)+'" y="'+mid.y.toFixed(1)+'" text-anchor="middle" '+
+           'dominant-baseline="middle" transform="rotate('+(a+step/2).toFixed(1)+','+
+           mid.x.toFixed(1)+','+mid.y.toFixed(1)+')" font-size="8" font-weight="700" '+
+           'fill="rgba(255,255,255,0.95)">'+esc(labels[i])+'</text>';
+  }
+  svg += '<circle cx="140" cy="140" r="31" fill="rgba(0,0,0,0.06)"/>';
+  svg += '<circle cx="140" cy="140" r="29" fill="white"/>';
+  svg += '<circle cx="140" cy="140" r="26" fill="#FFC244"/>';
+  svg += '<ellipse cx="136" cy="134" rx="10" ry="6" fill="rgba(255,255,255,0.35)"/>';
+  svg += '<text x="140" y="141" text-anchor="middle" dominant-baseline="middle" font-size="16" fill="white">☠</text>';
+  $('wheelSvg').innerHTML = svg;
+}
+
+function spinTo(index, count){
+  var step = 360/count, center = index*step + step/2;
+  // Always advance at least five full turns, then land the winning wedge
+  // under the fixed pointer at top.
+  rotation += (5*360) + (360 - center) - (rotation % 360);
+  $('wheelSvg').style.transform = 'rotate(' + rotation + 'deg)';
+}
+
+// ---- Celebration -------------------------------------------------------
+function celebrate(){
+  var box = document.createElement('div');
+  box.className = 'confetti';
+  for (var i=0;i<18;i++){
+    var p = document.createElement('i');
+    p.style.left = Math.random()*100 + '%';
+    p.style.background = WEDGE_COLORS[i % WEDGE_COLORS.length];
+    p.style.animationDuration = (1.8 + Math.random()*1.2) + 's';
+    p.style.animationDelay = (Math.random()*0.35) + 's';
+    box.appendChild(p);
+  }
+  document.body.appendChild(box);
+  setTimeout(function(){ box.remove(); }, 3400);
+
+  // Victory chime via WebAudio — three short notes, no audio file to load.
+  try {
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    var ctx = new Ctx();
+    [[660,0],[880,.11],[1320,.22]].forEach(function(n){
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.type='sine'; o.frequency.value=n[0];
+      o.connect(g); g.connect(ctx.destination);
+      var t = ctx.currentTime + n[1];
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.22,t+0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.24);
+      o.start(t); o.stop(t+0.26);
+    });
+  } catch(e){ /* audio blocked or unsupported — the visual still lands */ }
+}
+
+// ---- Render ------------------------------------------------------------
+function render(){
+  var p = state.partner, l = state.ladder, w = state.wheel;
+  renderGoldenHour();
+
+  $('storeName').textContent = p.storeName;
+  $('balance').textContent = '₦' + l.currentCredit.toLocaleString();
+  $('orderCount').textContent = p.ordersDelivered + ' orders';
+  $('nextTier').textContent = l.nextLabel ? (l.ordersToNext + ' more → ' + l.nextLabel) : 'Full Recovery reached';
+  $('ladderBar').style.width = l.progressPct + '%';
+
+  var steps = state.creditSteps, html = '';
+  for (var i=0;i<steps.length;i++){
+    var reached = steps[i].orders <= p.ordersDelivered, cur = (i === l.stepIndex);
+    html += '<div style="display:flex;flex-direction:column;align-items:center;gap:7px;position:relative;z-index:1">' +
+      '<div style="width:22px;height:22px;border-radius:50%;background:'+(reached?'#00A082':'#F0F0F2')+
+      ';display:flex;align-items:center;justify-content:center;'+
+      (cur?'box-shadow:0 0 0 4px rgba(0,160,130,.2)':'')+'">' +
+      '<div style="width:8px;height:8px;border-radius:50%;background:'+(reached?'#fff':'#C7C7CC')+'"></div></div>' +
+      '<div style="font-size:9px;font-weight:'+(cur?700:500)+';color:'+(cur?'#00A082':'#B0B0B5')+'">' +
+      esc(steps[i].label)+'</div></div>';
+  }
+  $('ladderSteps').innerHTML = html;
+  $('ladderTrack').style.width = ((l.stepIndex/(steps.length-1))*100) + '%';
+
+  $('wheelTitle').textContent = (w.tierName || 'Locked') + ' Wheel';
+  $('wheelSub').textContent = p.ordersDelivered + ' orders · ' +
+    (w.locked ? 'wheel locked' : w.spinAvailable ? '1 spin available' : 'spin used');
+  $('wheelBadge').textContent = w.locked ? (w.ordersToUnlockFirst + ' to unlock')
+    : w.ordersToJackpot > 0 ? (w.ordersToJackpot + ' to Jackpot') : 'Jackpot unlocked';
+
+  show($('wheelLock'), w.locked);
+  show($('spinBtn'), w.spinAvailable && !busy);
+
+  // At the lifetime cap the wheel still spins, but only non-cash prizes
+  // remain in the pool — say so rather than letting it look broken.
+  if (state.credit && state.credit.atCap) {
+    $('wheelSub').textContent += ' · ₦25K credit cap reached, prizes only';
+  }
+}
+
+function showError(el, msg){ el.textContent = msg; show(el, true); }
+
+// ---- Actions -----------------------------------------------------------
+function login(){
+  var said = $('saidInput').value.replace(/\D/g,'');
+  show($('loginErr'), false);
+  if (said.length !== 6) { showError($('loginErr'), 'Enter all 6 digits of your SAID.'); return; }
+
+  $('loginBtn').disabled = true;
+  $('loginBtn').textContent = 'Checking…';
+  google.script.run
+    .withSuccessHandler(function(res){
+      $('loginBtn').disabled = false;
+      $('loginBtn').textContent = 'Unlock my Arcade';
+      if (res.error) { showError($('loginErr'), res.error === 'SAID not found'
+        ? 'We couldn’t find that SAID. Check the code with your Account Manager.' : res.error); return; }
+      state = res;
+      state.creditSteps = res.creditSteps || CREDIT_STEP_FALLBACK;
+      drawWheel(res.prizeLabels);
+      show($('loginView'), false); show($('arcadeView'), true);
+      render();
+    })
+    .withFailureHandler(function(err){
+      $('loginBtn').disabled = false;
+      $('loginBtn').textContent = 'Unlock my Arcade';
+      showError($('loginErr'), 'Connection problem. Check your internet and try again.');
+    })
+    .arcadeLookup(said);
+}
+
+function spin(){
+  if (busy || !state) return;
+  busy = true;
+  show($('arcadeErr'), false);
+  show($('prizeResult'), false);
+  $('spinBtn').disabled = true;
+  $('spinBtn').textContent = 'Spinning…';
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      if (res.error) {
+        busy = false;
+        $('spinBtn').disabled = false;
+        $('spinBtn').textContent = 'Spin Now';
+        // Previously these failures were silent — the partner tapped Spin
+        // and simply nothing happened. Always surface them.
+        showError($('arcadeErr'), res.error === 'Spin already used for this tier'
+          ? 'You’ve already spun this wheel. Keep ordering to unlock the next one.'
+          : res.error);
+        if (res.error === 'Spin already used for this tier') {
+          state.wheel.spinAvailable = false; render();
+        }
+        return;
+      }
+
+      spinTo(res.prizeIndex, res.prizeLabels.length);
+      setTimeout(function(){
+        busy = false;
+        $('spinBtn').textContent = 'Spin Now';
+        state.wheel.spinAvailable = false;
+        $('prizeName').textContent = res.prizeLabel;
+        show($('prizeResult'), true);
+        render();
+        celebrate();
+      }, 3200);
+    })
+    .withFailureHandler(function(){
+      busy = false;
+      $('spinBtn').disabled = false;
+      $('spinBtn').textContent = 'Spin Now';
+      showError($('arcadeErr'), 'Couldn’t reach the server. Your spin was NOT used — try again.');
+    })
+    .arcadeSpin(state.partner.said);
+}
+
+var CREDIT_STEP_FALLBACK = [
+  {orders:0,label:'₦0'},{orders:5,label:'₦5K'},{orders:10,label:'₦10K'},{orders:15,label:'₦12.5K'},
+  {orders:20,label:'₦15K'},{orders:30,label:'₦20K'},{orders:40,label:'₦25K'}
+];
+
+$('saidInput').addEventListener('input', function(e){
+  e.target.value = e.target.value.replace(/\D/g,'').slice(0,6);
+  show($('loginErr'), false);
+});
+$('saidInput').addEventListener('keydown', function(e){ if (e.key === 'Enter') login(); });
+$('loginBtn').addEventListener('click', login);
+$('spinBtn').addEventListener('click', spin);
+$('logoutBtn').addEventListener('click', function(){
+  state = null; rotation = 0; busy = false;
+  $('saidInput').value = '';
+  $('wheelSvg').style.transform = 'rotate(0deg)';
+  show($('prizeResult'), false); show($('arcadeErr'), false);
+  show($('arcadeView'), false); show($('loginView'), true);
+});
+
+renderGoldenHour();
+setInterval(renderGoldenHour, 60000);
+</script>
+</body>
+</html>

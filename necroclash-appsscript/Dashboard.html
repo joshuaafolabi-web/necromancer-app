@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <style>
+    /* PRD Section 10 tokens. System font stack rather than a Google Fonts
+       request — one less blocking third-party load on an internal tool. */
+    *{box-sizing:border-box}
+    body{margin:0;background:#F5F5F7;color:#1D1D1F;-webkit-font-smoothing:antialiased;
+         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+    .wrap{max-width:1100px;margin:0 auto;padding:24px 20px 60px}
+    .card{background:#fff;border-radius:16px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+    select{border:1px solid #E5E5EA;border-radius:10px;padding:8px 12px;font-size:13px;font-family:inherit}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .empty{color:#8E8E93;font-size:13px;text-align:center;padding:60px 0;line-height:1.6}
+    .bar{height:8px;border-radius:4px;overflow:hidden}
+    @media (max-width:820px){ .cols{grid-template-columns:1fr !important} .board-row,.board-head{grid-template-columns:36px 1fr 90px 70px !important} .col-react{display:none} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;flex-wrap:wrap">
+      <div>
+        <div class="mono" style="font-size:10.5px;font-weight:600;color:#8E8E93;text-transform:uppercase;letter-spacing:.08em">NECROCLASH</div>
+        <h1 id="selfName" style="font-weight:800;font-size:22px;margin:2px 0 0">Loading…</h1>
+        <div id="weekLabel" style="font-size:11px;color:#8E8E93;margin-top:3px"></div>
+      </div>
+      <div style="text-align:right">
+        <select id="amSelect"></select>
+        <div id="identityNote" style="font-size:10px;color:#8E8E93;margin-top:5px"></div>
+      </div>
+    </div>
+    <div id="content"><div class="empty">Loading NECROCLASH…</div></div>
+  </div>
+
+  <script>
+    var RANK_COLOR = { Archnecromancer:'#B8860B', Soulforger:'#6D28D9', Wraithbinder:'#00A082', Bonecaller:'#9CA3AF' };
+
+    // Store and AM names come from a hand-edited Sheet and were previously
+    // concatenated straight into innerHTML. A name containing & or < broke
+    // the page silently; anything worse was an injection into an internal
+    // dashboard. Everything from the Sheet goes through esc() now.
+    function esc(s){
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+      });
+    }
+    function $(id){ return document.getElementById(id); }
+
+    function init(){
+      // Ask who the viewer is first. On a domain-restricted deployment this
+      // lands the AM straight on their own dashboard; otherwise it comes
+      // back empty and the picker takes over.
+      google.script.run.withSuccessHandler(function(viewer){
+        google.script.run.withSuccessHandler(function(ams){
+          var sel = $('amSelect');
+          if (!ams.length) {
+            $('content').innerHTML = '<div class="empty">The <b>AMs</b> tab is empty.<br>Add <code>am_name</code> and <code>am_email</code> rows to the Sheet, then reload.</div>';
+            $('selfName').textContent = 'No AMs found';
+            return;
+          }
+          sel.innerHTML = ams.map(function(a){
+            return '<option value="'+esc(a.am_email)+'">'+esc(a.am_name)+'</option>';
+          }).join('');
+
+          var match = null;
+          for (var i=0;i<ams.length;i++) if (ams[i].am_email === viewer) match = ams[i].am_email;
+
+          if (match) {
+            $('identityNote').textContent = 'Signed in as ' + viewer;
+            sel.style.display = 'none';           // no reason to let an AM
+            $('identityNote').style.display = ''; // browse as someone else
+          } else {
+            $('identityNote').textContent = viewer
+              ? 'Signed in as ' + viewer + ' — not in the AMs tab'
+              : 'Viewing as (identity unavailable)';
+          }
+          loadFor(match || ams[0].am_email);
+        }).getAmList();
+      }).withFailureHandler(fail).getViewerEmail();
+    }
+
+    function fail(err){
+      $('content').innerHTML = '<div class="empty">Couldn’t load NECROCLASH.<br>' +
+        esc(err && err.message ? err.message : err) + '</div>';
+    }
+
+    function loadFor(email){
+      $('amSelect').value = email;
+      $('content').innerHTML = '<div class="empty">Loading…</div>';
+      google.script.run.withSuccessHandler(render).withFailureHandler(fail).getNecroclashJson(email);
+    }
+
+    function render(data){
+      if (data.error) { $('content').innerHTML = '<div class="empty">'+esc(data.error)+'</div>'; return; }
+
+      var self = data.self, duel = data.duel, coven = data.coven, quest = data.quest, board = data.leaderboard;
+      $('selfName').textContent = self.amName;
+      $('weekLabel').textContent = 'Week of ' + duel.weekStart;
+
+      var html = '';
+      html += '<div class="cols" style="display:grid;grid-template-columns:2fr 1fr;gap:18px;align-items:start">';
+      html += '<div style="display:flex;flex-direction:column;gap:18px">';
+
+      // ---- Soul Duel ----
+      html += '<div class="card" style="overflow:hidden">';
+      html += '<div style="padding:16px 24px;border-bottom:1px solid rgba(0,0,0,.05)"><div style="font-weight:800;font-size:14px">Soul Duel</div><div style="font-size:11px;color:#8E8E93;margin-top:2px">Weekly 1v1 — higher EP by week end wins</div></div>';
+      if (duel.rival) {
+        html += '<div style="padding:22px 24px;display:grid;grid-template-columns:1fr 1fr;gap:16px">';
+        html += duelCard(self.amName, self.rank, duel.selfPct, duel.selfLeading, duel.rivalPct, '#FFC244');
+        html += duelCard(duel.rival.amName, duel.rival.rank, duel.rivalPct, !duel.selfLeading, duel.selfPct, '#B0B0B5');
+        html += '</div>';
+      } else {
+        html += '<div class="empty" style="padding:32px 0">You have a bye this week — odd number of AMs.</div>';
+      }
+      html += '</div>';
+
+      // ---- Coven Clash ----
+      html += '<div class="card" style="overflow:hidden">';
+      html += '<div style="padding:16px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(0,0,0,.05)"><div><div style="font-weight:800;font-size:14px">Coven Clash</div><div style="font-size:11px;color:#8E8E93;margin-top:2px">First to 100% claims the target</div></div><div style="background:#FEF2F2;color:#DC2626;border-radius:8px;padding:5px 10px;font-size:10px;font-weight:700">Reckoning</div></div>';
+      html += '<div style="padding:22px 24px">';
+      if (coven.boss) {
+        html += '<div style="display:flex;align-items:center;gap:16px;background:#FAFAFA;border-radius:14px;padding:12px;margin-bottom:18px">';
+        html += '<div style="width:64px;height:64px;border-radius:16px;background:#FEF9EC;border:1px solid rgba(255,194,68,.2);display:flex;align-items:center;justify-content:center;font-size:28px">🍢</div>';
+        html += '<div style="flex:1"><div style="font-weight:800;font-size:14.5px">'+esc(coven.boss.name)+'</div><div style="font-size:11px;color:#8E8E93;margin-top:3px">'+esc(coven.boss.segmentLabel)+'</div></div></div>';
+      } else {
+        html += '<div style="font-size:12px;color:#8E8E93;margin-bottom:18px">No Tier 2 (Leviathan) partner assigned to your Coven this week — nothing to raid.</div>';
+      }
+      var myPct = coven.boss ? coven.boss.progressPct : 0;
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">';
+      html += '<div style="border-radius:14px;padding:14px;background:#F0FDF9;border:1.5px solid rgba(0,160,130,.2)">';
+      html += '<div style="font-size:10.5px;font-weight:700;color:#00A082;margin-bottom:10px">Your Coven'+(coven.mate?' — with '+esc(coven.mate):' (solo this week)')+'</div>';
+      html += '<div style="display:flex;justify-content:space-between;font-size:10px;color:#00A082;margin-bottom:5px"><span>Progress</span><span style="font-weight:700">'+myPct+'%</span></div>';
+      html += '<div class="bar" style="background:rgba(0,160,130,.12)"><div style="width:'+myPct+'%;height:100%;background:#00A082"></div></div></div>';
+      html += '<div style="border-radius:14px;padding:14px;background:#FAFAFA;border:1px solid rgba(0,0,0,.05)">';
+      html += '<div style="font-size:10.5px;font-weight:700;color:#8E8E93;margin-bottom:10px">Rival — '+(coven.rivalNames.length?esc(coven.rivalNames.join(' & ')):'none')+'</div>';
+      html += '<div style="display:flex;justify-content:space-between;font-size:10px;color:#8E8E93;margin-bottom:5px"><span>Progress</span><span style="font-weight:700">'+coven.rivalProgressPct+'%</span></div>';
+      html += '<div class="bar" style="background:rgba(0,0,0,.06)"><div style="width:'+coven.rivalProgressPct+'%;height:100%;background:#D1D5DB"></div></div></div>';
+      html += '</div></div></div>';
+
+      html += '</div>'; // end left column
+
+      // ---- Right column ----
+      html += '<div style="display:flex;flex-direction:column;gap:18px">';
+      html += '<div class="card" style="padding:20px">';
+      html += '<div class="mono" style="font-size:10.5px;font-weight:600;color:#8E8E93;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">Weekly Quest</div>';
+      html += '<div style="font-weight:800;font-size:14px">'+esc(quest.text)+'</div>';
+      html += '<div style="font-size:12px;color:#3A3A3C;margin-top:10px">'+quest.progress+' of '+quest.target+' complete</div>';
+      html += '<div class="bar" style="background:#F0F0F2;margin-top:8px"><div style="width:'+((quest.progress/quest.target)*100)+'%;height:100%;background:'+(quest.complete?'#00A082':'#FFC244')+'"></div></div>';
+      html += '<div style="margin-top:14px;background:'+(quest.complete?'#F0FDF9':'#FFFBEC')+';border:1px solid '+(quest.complete?'rgba(0,160,130,.25)':'rgba(255,194,68,.25)')+';border-radius:10px;padding:10px"><div style="font-size:10px;font-weight:700;color:'+(quest.complete?'#00786A':'#92620C')+'">'+(quest.complete?'Complete — 2× EP for the rest of the week.':'Completion unlocks 2× EP for the rest of the week.')+'</div></div>';
+      html += '</div>';
+
+      html += '<div class="card" style="padding:20px">';
+      html += '<div class="mono" style="font-size:10.5px;font-weight:600;color:#8E8E93;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Your EP</div>';
+      html += '<div class="mono" style="font-weight:800;font-size:24px;color:#B8860B">'+self.ep+' EP</div>';
+      html += '<div style="font-size:11px;color:#8E8E93;margin-top:4px">'+self.reactivations+' of '+self.partnerCount+' partners reactivated · rank '+esc(self.rank)+'</div>';
+      // Labelled honestly: this is EP standing to date, computed live from
+      // current order counts. Weekly-delta EP needs a Monday snapshot that
+      // this pilot build doesn't persist yet.
+      html += '<div style="font-size:10px;color:#C7C7CC;margin-top:8px;line-height:1.5">Total EP to date, recomputed live from delivered orders.</div>';
+      html += '</div>';
+
+      // ---- Your Book — acceptance, orders, and uptime monitoring ----
+      html += '<div class="card" style="padding:20px">';
+      html += '<div class="mono" style="font-size:10.5px;font-weight:600;color:#8E8E93;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">Your Book</div>';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
+      html += bookStat('Accepted', self.acceptedCount+' / '+self.partnerCount, '#00A082');
+      html += bookStat('Orders Delivered', self.ordersDelivered.toLocaleString(), '#1D1D1F');
+      html += '</div>';
+      html += '<div style="margin-top:12px">';
+      if (self.avgUptimePct == null) {
+        html += '<div style="font-size:11px;color:#8E8E93">No uptime data yet for accepted partners.</div>';
+      } else {
+        html += '<div style="display:flex;justify-content:space-between;font-size:10px;color:#8E8E93;margin-bottom:5px"><span>Avg. uptime since accepting</span><span style="font-weight:700;color:#1D1D1F">'+self.avgUptimePct+'%</span></div>';
+        html += '<div class="bar" style="background:#F0F0F2"><div style="width:'+self.avgUptimePct+'%;height:100%;background:'+(self.avgUptimePct>=70?'#00A082':self.avgUptimePct>=40?'#FFC244':'#DC2626')+'"></div></div>';
+      }
+      html += '</div>';
+      html += '<div style="font-size:10px;color:#C7C7CC;margin-top:10px;line-height:1.5">Uptime is averaged only over partners who\'ve accepted the challenge — a store that hasn\'t started yet has no campaign uptime to report.</div>';
+      html += '</div></div>';
+
+      html += '</div>'; // end grid
+
+      // ---- Bone Throne ----
+      html += '<div style="margin-top:24px;border-radius:20px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.1)">';
+      html += '<div style="background:#111827;padding:20px 24px"><div class="mono" style="font-size:10px;font-weight:800;color:#FFC244;text-transform:uppercase;letter-spacing:.25em;margin-bottom:8px">The Bone Throne</div><div style="font-weight:800;font-size:20px;color:#fff">'+(board[0]?esc(board[0].amName)+' holds the Throne — '+board[0].ep+' EP':'No contenders yet')+'</div></div>';
+      html += '<div style="background:#111827">';
+      html += '<div class="board-head" style="display:grid;grid-template-columns:44px 1fr 160px 90px 90px;padding:12px 24px;font-size:9px;font-weight:700;color:#4B5563;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid rgba(255,255,255,.04)"><div>#</div><div>Account Manager</div><div>Rank</div><div class="col-react" style="text-align:right">Reactivations</div><div style="text-align:right">EP</div></div>';
+      board.forEach(function(row, i){
+        var isSelf = row.amEmail === self.amEmail;
+        html += '<div class="board-row" style="display:grid;grid-template-columns:44px 1fr 160px 90px 90px;padding:13px 24px;align-items:center;background:'+(isSelf?'rgba(255,194,68,.04)':'transparent')+';border-left:3px solid '+(isSelf?'#FFC244':'transparent')+';border-bottom:1px solid rgba(255,255,255,.03)">';
+        html += '<div class="mono" style="font-weight:700;font-size:14px;color:'+(i===0?'#FFC244':'#6B7280')+'">'+(i+1)+'</div>';
+        html += '<div style="font-size:13px;font-weight:600;color:'+(isSelf?'#FFC244':'#E2E8F0')+'">'+esc(row.amName)+(isSelf?' <span style="font-size:8px;font-weight:800;padding:2px 6px;border-radius:6px;background:#FFF7E3;color:#B8860B;margin-left:8px">YOU</span>':'')+'</div>';
+        html += '<div><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:8px;background:#374151;color:'+(RANK_COLOR[row.rank]||'#9CA3AF')+'">'+esc(row.rank)+'</span></div>';
+        html += '<div class="mono col-react" style="text-align:right;font-size:13px;color:#B0B0B5">'+row.reactivations+'</div>';
+        html += '<div class="mono" style="text-align:right;font-weight:800;font-size:14px;color:'+(i===0?'#D4AF37':'#9CA3AF')+'">'+row.ep+'</div>';
+        html += '</div>';
+      });
+      html += '<div style="text-align:center;font-size:10px;color:#374151;padding:18px">Necromancer Pilot · Glovo Nigeria</div>';
+      html += '</div></div>';
+
+      $('content').innerHTML = html;
+    }
+
+    function bookStat(label, value, color){
+      var h = '<div style="border-radius:12px;padding:12px;background:#FAFAFA;border:1px solid rgba(0,0,0,.05)">';
+      h += '<div style="font-size:9.5px;font-weight:700;color:#8E8E93;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">'+esc(label)+'</div>';
+      h += '<div class="mono" style="font-weight:800;font-size:16px;color:'+color+'">'+esc(value)+'</div>';
+      h += '</div>';
+      return h;
+    }
+
+    function duelCard(name, rank, pct, leading, otherPct, barColor){
+      var h = '<div style="background:#fff;border-radius:18px;padding:16px;box-shadow:0 4px 20px rgba(0,0,0,.06)">';
+      h += '<div style="font-weight:700;font-size:13px;color:'+(RANK_COLOR[rank]||'#1D1D1F')+'">'+esc(name)+'</div>';
+      h += '<div style="font-size:10px;color:#8E8E93;margin-top:2px">'+esc(rank)+'</div>';
+      h += '<div class="bar" style="background:#F0F0F2;margin-top:10px;height:7px"><div style="width:'+pct+'%;height:100%;background:'+barColor+'"></div></div>';
+      h += '<div style="margin-top:10px;padding:7px;border-radius:10px;background:#F8F8F8;font-size:11px;font-weight:600;color:#8E8E93">'+(leading?'Leading ↑':('Trailing by '+Math.max(otherPct-pct,0)+'%'))+'</div>';
+      h += '</div>';
+      return h;
+    }
+
+    $('amSelect').addEventListener('change', function(){ loadFor(this.value); });
+    init();
+  </script>
+</body>
+</html>
