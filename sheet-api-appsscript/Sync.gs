@@ -20,7 +20,10 @@
  *                   to Netlify so the Arcade can look partners up.
  *   pullEvents()    every 15 min — collects spins and challenge acceptances
  *                   from Netlify, writes them into SpinLog and
- *                   challenge_accepted_at, and emails the Account Manager
+ *                   challenge_accepted_at, and emails BOTH the Account
+ *                   Manager (Project Lazarus-branded — internal audience)
+ *                   and the partner (plain Glovo-branded "you're in!" —
+ *                   external audience, never sees the internal codename)
  *                   about new acceptances. Then acknowledges them so they
  *                   are not delivered twice.
  *
@@ -190,12 +193,15 @@ function notifyMilestones_(row, rowIndex, headers, said, orders, storeName, netl
 
   var link = netlifyBaseUrl + '/arcade?said=' + said;
   var labelLines = newlyCrossed.map(function (m) { return '- ' + m.label; }).join('\n');
+  // Plain Glovo branding, not "[Project Lazarus]" — that's the internal
+  // codename, and partners are an external audience. Only AM-facing email
+  // (notifyAccountManager_ in Code.gs) carries the Lazarus tag.
   var subject = newlyCrossed.length === 1
-    ? '[Project Lazarus] New spin unlocked — ' + newlyCrossed[0].label
-    : '[Project Lazarus] ' + newlyCrossed.length + ' new spins unlocked';
+    ? '[Glovo] New spin unlocked — ' + newlyCrossed[0].label
+    : '[Glovo] ' + newlyCrossed.length + ' new spins unlocked';
   var body =
     (storeName || 'Hi') + ',\n\n' +
-    'Your revival continues — you just crossed ' + orders + ' orders delivered and unlocked:\n' +
+    'Great progress — you just crossed ' + orders + ' orders delivered and unlocked:\n' +
     labelLines + '\n\n' +
     'Spin now: ' + link + '\n\n' +
     '— Glovo Nigeria';
@@ -212,6 +218,40 @@ function notifyMilestones_(row, rowIndex, headers, said, orders, storeName, netl
   if (notifiedCol >= 0) {
     newlyCrossed.forEach(function (m) { already[m.name] = true; });
     setPartnerCell_(rowIndex, headers, 'milestonesnotified', Object.keys(already).join(','));
+  }
+}
+
+/**
+ * Congratulates the partner the instant their acceptance is recorded.
+ * Plain Glovo branding, same rule as notifyMilestones_ above — partners
+ * never see the internal "Project Lazarus" codename, only AMs do.
+ * Skips quietly if patner_email isn't on the Sheet or is blank for this
+ * row, same pattern as the milestone email.
+ */
+function notifyPartnerAccepted_(partnerObj, netlifyBaseUrl) {
+  var email = String(partnerObj[PARTNER_EMAIL_HEADER_] || '').trim();
+  if (!email) return { sent: false, reason: 'no patner_email on this partner' };
+
+  var storeName = String(partnerObj.store_name || 'there');
+  var said = normalizeSaid_(partnerObj.said || partnerObj.store_address_id);
+  var link = netlifyBaseUrl + '/arcade?said=' + said;
+
+  var subject = "[Glovo] You're in! Your 30-day challenge has started";
+  var body =
+    storeName + ',\n\n' +
+    "You're officially in. Your 30 days start today — every order you " +
+    'deliver moves you closer to real rewards for your store.\n\n' +
+    'Hit 10 orders to unlock your first spin.\n\n' +
+    'Check your progress any time: ' + link + '\n\n' +
+    'Your Account Manager has been notified and will be in touch to help ' +
+    'you get your first orders in.\n\n' +
+    '— Glovo Nigeria';
+
+  try {
+    MailApp.sendEmail(email, subject, body);
+    return { sent: true, to: email };
+  } catch (err) {
+    return { sent: false, reason: String(err && err.message ? err.message : err) };
   }
 }
 
@@ -285,7 +325,8 @@ function pullEvents() {
   }
 
   var handled = [];
-  var spinsWritten = 0, acceptsWritten = 0, mailsSent = 0, problems = [];
+  var spinsWritten = 0, acceptsWritten = 0, amMailsSent = 0, partnerMailsSent = 0, problems = [];
+  var netlifyBaseUrl = syncProp_('NETLIFY_BASE_URL');
 
   // Read SpinLog once so de-duplication doesn't re-read per event.
   var cols = spinLogCols_();
@@ -329,7 +370,10 @@ function pullEvents() {
           setPartnerCell_(found.rowIndex, found.headers, 'challenge_accepted_at', toLagosTime_(ev.at));
           acceptsWritten++;
           if (notifyAccountManager_(found.obj, Number(found.obj.orders_delivered) || 0).sent) {
-            mailsSent++;
+            amMailsSent++;
+          }
+          if (notifyPartnerAccepted_(found.obj, netlifyBaseUrl).sent) {
+            partnerMailsSent++;
           }
         }
         handled.push(ev.key);
@@ -353,7 +397,8 @@ function pullEvents() {
   }
 
   var msg = 'Pulled ' + events.length + ' event(s): ' + spinsWritten + ' spin(s) logged, ' +
-            acceptsWritten + ' acceptance(s) recorded, ' + mailsSent + ' AM email(s) sent.' +
+            acceptsWritten + ' acceptance(s) recorded, ' + amMailsSent + ' AM email(s) sent, ' +
+            partnerMailsSent + ' partner acceptance email(s) sent.' +
             (problems.length ? '\nProblems:\n  ' + problems.join('\n  ') : '');
   Logger.log(msg);
   return msg;
