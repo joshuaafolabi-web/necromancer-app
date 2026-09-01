@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import TopNav from '@/components/TopNav';
 import Wheel from '@/components/Wheel';
 import RewardGallery from '@/components/RewardGallery';
@@ -48,10 +48,33 @@ export default function ArcadePage() {
   const [accepting, setAccepting] = useState(false);
   const [acceptNote, setAcceptNote] = useState('');
   const [milestoneNote, setMilestoneNote] = useState<string | null>(null);
-  // Snapshot of which milestone is being spun for, held for the duration of
-  // the spin animation + reveal so the wheel keeps showing the right wedges
-  // even after `data` has refreshed to whatever milestone comes next.
+  // Snapshot of which milestone is being spun for, held only for the spin
+  // animation itself — cleared as soon as the result is known, so the
+  // button/wheel/badge immediately reflect live milestone state (bright
+  // when the next one is reached, blurred otherwise) rather than waiting
+  // on any manual acknowledgment.
   const [spinningMilestone, setSpinningMilestone] = useState<CurrentMilestone | null>(null);
+  // How long a win/loss/rank result stays visible before clearing itself.
+  // Not indefinite (that was the original bug — see resultFadeTimer below)
+  // and not gated behind a manual dismiss either — it just fades on its
+  // own, same as a toast, while the rest of the UI has already moved on.
+  const RESULT_FADE_MS = 4000;
+  const resultFadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function clearResult() {
+    setWonPrize(null);
+    setLostNote(null);
+    setNotYetRanked(false);
+  }
+
+  function showResultThenFade() {
+    if (resultFadeTimer.current) clearTimeout(resultFadeTimer.current);
+    resultFadeTimer.current = setTimeout(clearResult, RESULT_FADE_MS);
+  }
+
+  useEffect(() => {
+    return () => { if (resultFadeTimer.current) clearTimeout(resultFadeTimer.current); };
+  }, []);
 
   // The landing page's "type your SAID to join" box sends partners here as
   // /arcade?said=XXXXXX rather than making them re-type it. Read via
@@ -128,9 +151,8 @@ export default function ArcadePage() {
         return;
       }
       setData(body);
-      setWonPrize(null);
-      setLostNote(null);
-      setNotYetRanked(false);
+      if (resultFadeTimer.current) clearTimeout(resultFadeTimer.current);
+      clearResult();
       setSpinningMilestone(null);
     } catch {
       setError('Connection problem. Check your internet and try again.');
@@ -156,11 +178,10 @@ export default function ArcadePage() {
   async function spin() {
     if (!data || spinning || !data.wheel.current) return;
     const current = data.wheel.current;
+    if (resultFadeTimer.current) clearTimeout(resultFadeTimer.current);
     setSpinningMilestone(current);
     setSpinning(true);
-    setWonPrize(null);
-    setLostNote(null);
-    setNotYetRanked(false);
+    clearResult();
     setError('');
 
     try {
@@ -204,13 +225,12 @@ export default function ArcadePage() {
         } else {
           setLostNote(`No prize this time on the ${result.prizeLabel} draw.`);
         }
-        // spinningMilestone stays set here — it pins the wheel and header to
-        // what was JUST spun until dismissResult() runs. Clearing it right
-        // away (as this used to) let refreshLookup's fresh data show the
-        // NEXT milestone as "Ready · 1 spin available" while the old
-        // result ("no prize this time") was still on screen underneath —
-        // a partner would see what looked like two spins' worth of state
-        // at once.
+        showResultThenFade();
+        // Cleared immediately (not on a delay) — the button/wheel/badge
+        // read live off wheel.spinAvailable/wheel.current below, so once
+        // refreshLookup lands they correctly show whatever's next, even
+        // while the result text above is still fading out.
+        setSpinningMilestone(null);
         await refreshLookup(data.partner.said);
       }, 3200);
     } catch {
@@ -218,16 +238,6 @@ export default function ArcadePage() {
       setSpinningMilestone(null);
       setError('Could not reach the server. Your spin was NOT used — please try again.');
     }
-  }
-
-  /** Clears a shown win/loss/rank result and hands the wheel back to
-   *  whatever the fresh lookup says is next — the explicit hand-off point
-   *  between "here's what just happened" and "here's what's next". */
-  function dismissResult() {
-    setWonPrize(null);
-    setLostNote(null);
-    setNotYetRanked(false);
-    setSpinningMilestone(null);
   }
 
   if (!data) {
@@ -278,15 +288,11 @@ export default function ArcadePage() {
   }
 
   const { partner, milestones, wheel, credit, challenge, spins } = data;
-  // True while a win/loss/rank result is on screen and hasn't been
-  // dismissed yet. Everything below reads this rather than wheel.spinAvailable
-  // directly, so the header/badge/button can't show "ready for the next
-  // milestone" while still displaying the previous one's result.
-  const hasPendingResult = wonPrize !== null || lostNote !== null || notYetRanked;
   // The wheel visual reflects whichever milestone is currently being spun
-  // for, or whose result is still being shown (spinningMilestone is only
-  // cleared by dismissResult() now) — or, once dismissed, whatever the
-  // fresh lookup says is next.
+  // for (during the animation) or, at rest, the one that's next up — live
+  // off wheel.current, same as the button/header/badge below. The win/loss
+  // text (wonPrize/lostNote/notYetRanked) is independent of this and fades
+  // on its own timer rather than gating what the wheel/button show.
   const activeMilestone = spinningMilestone ?? wheel.current;
   const wedgeLabels = activeMilestone
     ? activeMilestone.kind === 'chance'
@@ -419,28 +425,25 @@ export default function ArcadePage() {
         <div style={{ margin: '0 18px 16px', background: '#fff', borderRadius: 16, padding: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: '#1D1D1F' }}>{activeMilestone ? activeMilestone.label : 'No prize unlocked'}</div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: '#1D1D1F' }}>{wheel.current ? wheel.current.label : 'No prize unlocked'}</div>
               <div style={{ fontSize: 11, color: '#8E8E93', marginTop: 2 }}>
-                {partner.ordersDelivered} orders · {hasPendingResult ? 'spin complete' : wheel.spinAvailable ? '1 spin available' : 'nothing to claim right now'}
+                {partner.ordersDelivered} orders · {wheel.spinAvailable ? '1 spin available' : 'nothing to claim right now'}
                 {credit.atCap && ' · ₦25K credit cap reached'}
               </div>
             </div>
             <div style={{ background: '#FFFBEC', border: '1px solid rgba(255,194,68,0.3)', borderRadius: 8, padding: '5px 10px', fontSize: 10, fontWeight: 700, color: '#B8860B', whiteSpace: 'nowrap' }}>
-              {hasPendingResult ? 'Complete' : wheel.current ? 'Ready' : wheel.nextMilestoneLabel ? `${wheel.ordersToNextMilestone} to next` : 'All claimed'}
+              {wheel.current ? 'Ready' : wheel.nextMilestoneLabel ? `${wheel.ordersToNextMilestone} to next` : 'All claimed'}
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
-            {/* Spin Now sits above the wheel and always renders — disabled
-                (not hidden) once no spin is available, so tapping it always
-                tells the partner what's next rather than just doing
-                nothing. While a result is still showing, this becomes a
-                "Continue" button instead of jumping straight to the next
-                milestone's Spin Now — otherwise "no prize this time" and
-                "1 spin available" could both be on screen at once. */}
+            {/* Spin Now sits above the wheel and always renders — bright
+                when a milestone is reached, blurred/disabled otherwise —
+                driven live off wheel.spinAvailable, no manual step in
+                between spins. Tapping while blurred always tells the
+                partner what's next rather than doing nothing. */}
             <button
               onClick={() => {
                 if (spinning) return;
-                if (hasPendingResult) { dismissResult(); return; }
                 if (wheel.spinAvailable) { spin(); return; }
                 setMilestoneNote(
                   wheel.ordersToNextMilestone != null
@@ -456,15 +459,15 @@ export default function ArcadePage() {
                 fontSize: 13,
                 fontWeight: 700,
                 letterSpacing: '0.02em',
-                cursor: spinning ? 'default' : (hasPendingResult || wheel.spinAvailable) ? 'pointer' : 'not-allowed',
-                background: spinning ? '#E5E7EB' : (hasPendingResult || wheel.spinAvailable) ? '#FFC244' : '#F0F0F2',
-                color: spinning ? '#9CA3AF' : (hasPendingResult || wheel.spinAvailable) ? '#1D1D1F' : '#B0B0B5',
-                boxShadow: !spinning && (hasPendingResult || wheel.spinAvailable) ? '0 4px 16px rgba(255,194,68,0.4)' : 'none',
+                cursor: spinning ? 'default' : wheel.spinAvailable ? 'pointer' : 'not-allowed',
+                background: spinning ? '#E5E7EB' : wheel.spinAvailable ? '#FFC244' : '#F0F0F2',
+                color: spinning ? '#9CA3AF' : wheel.spinAvailable ? '#1D1D1F' : '#B0B0B5',
+                boxShadow: !spinning && wheel.spinAvailable ? '0 4px 16px rgba(255,194,68,0.4)' : 'none',
               }}
             >
-              {spinning ? 'Spinning…' : hasPendingResult ? 'Continue' : 'Spin Now'}
+              {spinning ? 'Spinning…' : 'Spin Now'}
             </button>
-            <Wheel rotationDeg={rotation} locked={!hasPendingResult && !wheel.spinAvailable && !spinning} labels={wedgeLabels} />
+            <Wheel rotationDeg={rotation} locked={!wheel.spinAvailable && !spinning} labels={wedgeLabels} />
             {wonPrize && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 10, color: '#8E8E93', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'JetBrains Mono, monospace' }}>You won</div>
