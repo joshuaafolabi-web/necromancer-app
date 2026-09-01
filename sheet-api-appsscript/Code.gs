@@ -188,13 +188,15 @@ function notifyAccountManager_(partnerObj, orders) {
   var subject = '[Project Lazarus] ' + storeName + ' accepted the 30-day challenge';
   var body =
     storeName + ' has just accepted the 30-day Reactivation Challenge.\n\n' +
-    'SAID:              ' + normalizeSaid_(partnerObj.said) + '\n' +
-    'Segment:           ' + (partnerObj.segment || '—') + '\n' +
+    // partnerObj.said doesn't exist on the real Sheet — same root cause as
+    // saidColumnIndex_ (Code.gs) elsewhere: the actual column is
+    // store_address_id, "said" is just the name every doc/comment uses.
+    'SAID:              ' + normalizeSaid_(partnerObj.said || partnerObj.store_address_id) + '\n' +
+    'Tier:              ' + (partnerObj.tier || '—') + '\n' +
     'Orders delivered:  ' + orders + '\n\n' +
-    'They have 30 days to climb the Ads Credit ladder. Reach out and help them get ' +
-    'their first orders in — the first five unlock both ₦5,000 of Ads Credit and ' +
-    'their first spin.\n\n' +
-    'Their progress is on your NECROCLASH dashboard.';
+    'They have 30 days to unlock milestone rewards. Reach out and help them get ' +
+    'their first orders in — 10 delivered orders unlocks their first spin.\n\n' +
+    'Their progress is on your Lazarus League dashboard.';
 
   try {
     MailApp.sendEmail(amEmail, subject, body);
