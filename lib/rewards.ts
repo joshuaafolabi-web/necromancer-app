@@ -39,7 +39,7 @@ export const REWARDS: Reward[] = [
     blurb: 'A photographer shoots your menu, properly — unlocked at 80 orders.',
     emoji: '📸',
     tint: '#374151',
-    image: '/rewards/photography.png',
+    image: '/rewards/photography.jpg',
   },
   {
     title: 'Instagram Story Feature',
