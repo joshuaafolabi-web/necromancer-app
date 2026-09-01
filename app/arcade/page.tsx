@@ -131,6 +131,7 @@ export default function ArcadePage() {
       setWonPrize(null);
       setLostNote(null);
       setNotYetRanked(false);
+      setSpinningMilestone(null);
     } catch {
       setError('Connection problem. Check your internet and try again.');
     }
@@ -203,7 +204,13 @@ export default function ArcadePage() {
         } else {
           setLostNote(`No prize this time on the ${result.prizeLabel} draw.`);
         }
-        setSpinningMilestone(null);
+        // spinningMilestone stays set here — it pins the wheel and header to
+        // what was JUST spun until dismissResult() runs. Clearing it right
+        // away (as this used to) let refreshLookup's fresh data show the
+        // NEXT milestone as "Ready · 1 spin available" while the old
+        // result ("no prize this time") was still on screen underneath —
+        // a partner would see what looked like two spins' worth of state
+        // at once.
         await refreshLookup(data.partner.said);
       }, 3200);
     } catch {
@@ -211,6 +218,16 @@ export default function ArcadePage() {
       setSpinningMilestone(null);
       setError('Could not reach the server. Your spin was NOT used — please try again.');
     }
+  }
+
+  /** Clears a shown win/loss/rank result and hands the wheel back to
+   *  whatever the fresh lookup says is next — the explicit hand-off point
+   *  between "here's what just happened" and "here's what's next". */
+  function dismissResult() {
+    setWonPrize(null);
+    setLostNote(null);
+    setNotYetRanked(false);
+    setSpinningMilestone(null);
   }
 
   if (!data) {
@@ -261,8 +278,15 @@ export default function ArcadePage() {
   }
 
   const { partner, milestones, wheel, credit, challenge, spins } = data;
+  // True while a win/loss/rank result is on screen and hasn't been
+  // dismissed yet. Everything below reads this rather than wheel.spinAvailable
+  // directly, so the header/badge/button can't show "ready for the next
+  // milestone" while still displaying the previous one's result.
+  const hasPendingResult = wonPrize !== null || lostNote !== null || notYetRanked;
   // The wheel visual reflects whichever milestone is currently being spun
-  // for (during the animation) or, at rest, the one that's next up.
+  // for, or whose result is still being shown (spinningMilestone is only
+  // cleared by dismissResult() now) — or, once dismissed, whatever the
+  // fresh lookup says is next.
   const activeMilestone = spinningMilestone ?? wheel.current;
   const wedgeLabels = activeMilestone
     ? activeMilestone.kind === 'chance'
@@ -395,24 +419,28 @@ export default function ArcadePage() {
         <div style={{ margin: '0 18px 16px', background: '#fff', borderRadius: 16, padding: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: '#1D1D1F' }}>{wheel.current ? wheel.current.label : 'No prize unlocked'}</div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: '#1D1D1F' }}>{activeMilestone ? activeMilestone.label : 'No prize unlocked'}</div>
               <div style={{ fontSize: 11, color: '#8E8E93', marginTop: 2 }}>
-                {partner.ordersDelivered} orders · {wheel.spinAvailable ? '1 spin available' : 'nothing to claim right now'}
+                {partner.ordersDelivered} orders · {hasPendingResult ? 'spin complete' : wheel.spinAvailable ? '1 spin available' : 'nothing to claim right now'}
                 {credit.atCap && ' · ₦25K credit cap reached'}
               </div>
             </div>
             <div style={{ background: '#FFFBEC', border: '1px solid rgba(255,194,68,0.3)', borderRadius: 8, padding: '5px 10px', fontSize: 10, fontWeight: 700, color: '#B8860B', whiteSpace: 'nowrap' }}>
-              {wheel.current ? 'Ready' : wheel.nextMilestoneLabel ? `${wheel.ordersToNextMilestone} to next` : 'All claimed'}
+              {hasPendingResult ? 'Complete' : wheel.current ? 'Ready' : wheel.nextMilestoneLabel ? `${wheel.ordersToNextMilestone} to next` : 'All claimed'}
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
             {/* Spin Now sits above the wheel and always renders — disabled
                 (not hidden) once no spin is available, so tapping it always
                 tells the partner what's next rather than just doing
-                nothing. */}
+                nothing. While a result is still showing, this becomes a
+                "Continue" button instead of jumping straight to the next
+                milestone's Spin Now — otherwise "no prize this time" and
+                "1 spin available" could both be on screen at once. */}
             <button
               onClick={() => {
                 if (spinning) return;
+                if (hasPendingResult) { dismissResult(); return; }
                 if (wheel.spinAvailable) { spin(); return; }
                 setMilestoneNote(
                   wheel.ordersToNextMilestone != null
@@ -428,15 +456,15 @@ export default function ArcadePage() {
                 fontSize: 13,
                 fontWeight: 700,
                 letterSpacing: '0.02em',
-                cursor: spinning ? 'default' : wheel.spinAvailable ? 'pointer' : 'not-allowed',
-                background: spinning ? '#E5E7EB' : wheel.spinAvailable ? '#FFC244' : '#F0F0F2',
-                color: spinning ? '#9CA3AF' : wheel.spinAvailable ? '#1D1D1F' : '#B0B0B5',
-                boxShadow: !spinning && wheel.spinAvailable ? '0 4px 16px rgba(255,194,68,0.4)' : 'none',
+                cursor: spinning ? 'default' : (hasPendingResult || wheel.spinAvailable) ? 'pointer' : 'not-allowed',
+                background: spinning ? '#E5E7EB' : (hasPendingResult || wheel.spinAvailable) ? '#FFC244' : '#F0F0F2',
+                color: spinning ? '#9CA3AF' : (hasPendingResult || wheel.spinAvailable) ? '#1D1D1F' : '#B0B0B5',
+                boxShadow: !spinning && (hasPendingResult || wheel.spinAvailable) ? '0 4px 16px rgba(255,194,68,0.4)' : 'none',
               }}
             >
-              {spinning ? 'Spinning…' : 'Spin Now'}
+              {spinning ? 'Spinning…' : hasPendingResult ? 'Continue' : 'Spin Now'}
             </button>
-            <Wheel rotationDeg={rotation} locked={!wheel.spinAvailable && !spinning} labels={wedgeLabels} />
+            <Wheel rotationDeg={rotation} locked={!hasPendingResult && !wheel.spinAvailable && !spinning} labels={wedgeLabels} />
             {wonPrize && (
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 10, color: '#8E8E93', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'JetBrains Mono, monospace' }}>You won</div>

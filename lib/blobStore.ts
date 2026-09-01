@@ -194,6 +194,7 @@ const SEED_PARTNERS: SyncedPartner[] = [
   { said: '999005', storeName: 'Dev Store — credit-15 (15 orders)', tier: 'Tier 3', orders: 15 },
   { said: '999006', storeName: 'Dev Store — photography-80 (80 orders)', tier: 'Tier 2', orders: 80 },
   { said: '999013', storeName: 'Dev Store — credit-50 (50 orders)', tier: 'Tier 2', orders: 50 },
+  { said: '999014', storeName: 'Dev Store — full 4-milestone run (40 orders)', tier: 'Tier 2', orders: 40 },
   // 999007-999012: a 100+ order cohort for testing the instagram-100 top-5
   // ranking gate — only the top 5 by orders among these should qualify.
   { said: '999007', storeName: 'Dev Store — IG cohort rank 1 (140 orders)', tier: 'Tier 1', orders: 140 },
