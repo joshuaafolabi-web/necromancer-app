@@ -13,7 +13,7 @@
  * real difference between a "bound" and "standalone" Apps Script project;
  * both still need zero Google Cloud Console / IAM involvement.
  *
- * FOUR TABS (2026-09-04): Overview, Partner Roster, Tasks, Leaderboard. The
+ * FOUR TABS (2026-09-04): Overview, Partner List, Tasks, Leaderboard. The
  * first three are new — see the "TASK MANAGEMENT" section below for the
  * data model, state machine, and notification setup they need.
  *
@@ -984,6 +984,11 @@ function weekFloor_(d) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() - day);
 }
 
+// Challenge launch date — the "completed over time" chart has nothing to
+// show before this, so its window starts here instead of 8 weeks back from
+// today (which, early in the pilot, was mostly blank weeks before launch).
+var CHALLENGE_LAUNCH_DATE_ = new Date(2026, 8, 1); // September 1, 2026
+
 /** Configurable via Script Properties so this isn't a code change every
  *  time expectations shift — falls back to a sensible default. */
 function amExpectationsText_() {
@@ -1038,9 +1043,19 @@ function getOverview() {
 
     // Completed-over-time: Approved tasks bucketed by the Monday of the
     // week they were APPROVED (throughput, not just "marked done by AM").
+    // Window runs from the challenge launch week forward, capped to the
+    // most recent 8 weeks once the pilot runs that long — never earlier
+    // than launch, since there's nothing to plot before it.
+    var launchWeekStart = weekFloor_(CHALLENGE_LAUNCH_DATE_);
+    var todayWeekStart = weekFloor_(today);
+    var weeksSinceLaunch = Math.round((todayWeekStart - launchWeekStart) / (7 * 86400000)) + 1;
+    var weeksToShow = Math.min(8, Math.max(1, weeksSinceLaunch));
+    var windowStart = new Date(todayWeekStart.getTime() - (weeksToShow - 1) * 7 * 86400000);
+    if (windowStart < launchWeekStart) windowStart = launchWeekStart;
+
     var weeks = [];
-    for (var i = 7; i >= 0; i--) {
-      var wStart = weekFloor_(new Date(today.getTime() - i * 7 * 86400000));
+    for (var i = 0; i < weeksToShow; i++) {
+      var wStart = new Date(windowStart.getTime() + i * 7 * 86400000);
       weeks.push({ label: Utilities.formatDate(wStart, 'Africa/Lagos', 'MMM d'), key: wStart.getTime(), count: 0 });
     }
     var weekByKey = {};
