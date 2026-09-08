@@ -210,6 +210,26 @@ function normalizeSaid_(v) {
   return digits;
 }
 /**
+ * Reads a partner's campaign uptime without assuming the Sheet's uptime
+ * column is spelled exactly "uptime_campaign" — this project has already
+ * been bitten twice by a column being renamed or spelled slightly
+ * differently from what the code expected (SAID/store_address_id,
+ * segment/tier) and the mismatch failing silently as "no data" instead of
+ * an error. Matches any header containing "uptime", and tolerates a
+ * trailing "%" in case a value was typed in as text.
+ */
+function uptimeFromPartner_(p) {
+  var keys = Object.keys(p);
+  for (var i = 0; i < keys.length; i++) {
+    if (keys[i].indexOf('uptime') < 0) continue;
+    var raw = p[keys[i]];
+    if (raw === undefined || raw === null || String(raw).trim() === '') continue;
+    var num = Number(String(raw).replace('%', '').trim());
+    if (!isNaN(num)) return num;
+  }
+  return null;
+}
+/**
  * Extracts the tier from a segment label, ignoring decoration.
  *
  * The live sheet writes segments as "Tier 4 🌑", "Tier 3 🔴" and so on. An
@@ -381,12 +401,13 @@ function buildLeaderboard_(ss) {
       // its 30-day window yet has no "uptime since the campaign date" to
       // speak of, so including it would just water the number down with
       // zeros that mean "not started" rather than "underperforming".
-      // uptime_campaign is read as a raw 0-100 number straight off the
-      // Sheet; whatever populates that column is the source of truth here,
-      // not this script.
+      // Uptime is read as a raw 0-100 number straight off the Sheet;
+      // whatever populates that column is the source of truth here, not
+      // this script. uptimeFromPartner_ matches any header containing
+      // "uptime" rather than one exact spelling — see its own comment.
       var uptimeValues = accepted
-        .map(function (p) { return Number(p.uptime_campaign); })
-        .filter(function (n) { return !isNaN(n); });
+        .map(uptimeFromPartner_)
+        .filter(function (n) { return n !== null; });
       var avgUptimePct = uptimeValues.length
         ? Math.round(uptimeValues.reduce(function (s, n) { return s + n; }, 0) / uptimeValues.length)
         : null;
@@ -954,8 +975,7 @@ function getPartnerRoster() {
       .filter(function (p) { return String(p.challenge_accepted_at || '').trim() !== ''; })
       .map(function (p) {
         var amEmail = normalizeEmail_(p.am_email);
-        var uptime = (p.uptime_campaign !== undefined && p.uptime_campaign !== '' && !isNaN(Number(p.uptime_campaign)))
-          ? Number(p.uptime_campaign) : null;
+        var uptime = uptimeFromPartner_(p);
         return {
           said: normalizeSaid_(p.said || p.store_address_id),
           storeName: p.store_name,
@@ -1002,7 +1022,18 @@ function getOverview() {
   try {
     var ss = getSpreadsheet_();
     var partners = readTab_(ss, 'Partners');
-    var acceptedCount = partners.filter(function (p) { return String(p.challenge_accepted_at || '').trim() !== ''; }).length;
+    var acceptedPartners = partners.filter(function (p) { return String(p.challenge_accepted_at || '').trim() !== ''; });
+    var acceptedCount = acceptedPartners.length;
+
+    // Both scoped to accepted partners only, same reasoning as everywhere
+    // else in this file: a store that hasn't started its 30-day window
+    // yet has no campaign orders or uptime to speak of, so folding it in
+    // would just dilute the number with a zero that means "not started".
+    var totalOrdersDelivered = acceptedPartners.reduce(function (s, p) { return s + (Number(p.orders_delivered) || 0); }, 0);
+    var globalUptimeValues = acceptedPartners.map(uptimeFromPartner_).filter(function (n) { return n !== null; });
+    var globalAvgUptimePct = globalUptimeValues.length
+      ? Math.round(globalUptimeValues.reduce(function (s, n) { return s + n; }, 0) / globalUptimeValues.length)
+      : null;
 
     var tasksResult = getTasks();
     var tasks = Array.isArray(tasksResult) ? tasksResult : [];
@@ -1070,6 +1101,8 @@ function getOverview() {
 
     return {
       acceptedPartnerCount: acceptedCount,
+      totalOrdersDelivered: totalOrdersDelivered,
+      avgUptimePct: globalAvgUptimePct,
       taskCounts: taskCounts,
       pendingReviewCount: taskCounts['Under Review'],
       overdueCount: overdueTasks.length,
@@ -1145,11 +1178,9 @@ function preflightLazarusLeague() {
     var acceptedCount = partners.filter(function (p) {
       return String(p.challenge_accepted_at || '').trim() !== '';
     }).length;
-    var uptimeCount = partners.filter(function (p) {
-      return p.uptime_campaign !== undefined && p.uptime_campaign !== '' && !isNaN(Number(p.uptime_campaign));
-    }).length;
+    var uptimeCount = partners.filter(function (p) { return uptimeFromPartner_(p) !== null; }).length;
     out.push(acceptedCount + ' of ' + partners.length + ' partners have accepted the challenge; ' +
-             uptimeCount + ' have a numeric uptime_campaign value.');
+             uptimeCount + ' have a readable uptime value (any header containing "uptime").');
 
     var matchups = buildMatchups_(board.map(function (r) { return r.amEmail; }), weekIndex_());
     out.push('Week of ' + weekStart_() + ' duels:');

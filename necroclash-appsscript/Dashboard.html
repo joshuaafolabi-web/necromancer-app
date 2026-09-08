@@ -215,9 +215,15 @@
     function renderOverview(data){
       if (data && data.error) { $('tab-overview').innerHTML = '<div class="empty">'+esc(data.error)+'</div>'; return; }
 
+      var uptimeColor = data.avgUptimePct == null ? '#8E8E93' : data.avgUptimePct >= 70 ? '#00A082' : data.avgUptimePct >= 40 ? '#B8860B' : '#DC2626';
+
       var html = '';
-      html += '<div class="stat-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px">';
+      html += '<div class="stat-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px">';
       html += statCard('Accepted Partners', data.acceptedPartnerCount, '#1D1D1F');
+      html += statCard('Total Orders Delivered', data.totalOrdersDelivered.toLocaleString(), '#1D1D1F');
+      html += statCard('Avg. Uptime (Accepted)', data.avgUptimePct == null ? '—' : data.avgUptimePct + '%', uptimeColor);
+      html += '</div>';
+      html += '<div class="stat-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px">';
       html += statCard('Awaiting Review', data.pendingReviewCount, '#6D28D9');
       html += statCard('Overdue Tasks', data.overdueCount, data.overdueCount ? '#DC2626' : '#1D1D1F');
       html += statCard('Avg. AM Turnaround', data.avgAmTurnaroundDays == null ? '—' : data.avgAmTurnaroundDays + 'd', '#00A082');
