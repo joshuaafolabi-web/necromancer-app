@@ -1025,11 +1025,16 @@ function getOverview() {
     var acceptedPartners = partners.filter(function (p) { return String(p.challenge_accepted_at || '').trim() !== ''; });
     var acceptedCount = acceptedPartners.length;
 
-    // Both scoped to accepted partners only, same reasoning as everywhere
-    // else in this file: a store that hasn't started its 30-day window
-    // yet has no campaign orders or uptime to speak of, so folding it in
-    // would just dilute the number with a zero that means "not started".
-    var totalOrdersDelivered = acceptedPartners.reduce(function (s, p) { return s + (Number(p.orders_delivered) || 0); }, 0);
+    // Orders and GMV are fleet-wide business-impact numbers — the whole
+    // Partners tab, not just the subset who've additionally opted into the
+    // AM gamification challenge. A dormant partner contributes 0 either
+    // way, so summing over everyone is both correct and harmless.
+    var totalOrdersDelivered = partners.reduce(function (s, p) { return s + (Number(p.orders_delivered) || 0); }, 0);
+    var totalGmv = partners.reduce(function (s, p) { return s + (Number(p.total_order_value) || 0); }, 0);
+    // Uptime stays scoped to accepted partners only, same reasoning as
+    // everywhere else in this file: a store that hasn't started its
+    // 30-day window yet has no campaign uptime to speak of, so folding it
+    // in would just dilute the number with a zero that means "not started".
     var globalUptimeValues = acceptedPartners.map(uptimeFromPartner_).filter(function (n) { return n !== null; });
     var globalAvgUptimePct = globalUptimeValues.length
       ? Math.round(globalUptimeValues.reduce(function (s, n) { return s + n; }, 0) / globalUptimeValues.length)
@@ -1102,6 +1107,7 @@ function getOverview() {
     return {
       acceptedPartnerCount: acceptedCount,
       totalOrdersDelivered: totalOrdersDelivered,
+      totalGmv: totalGmv,
       avgUptimePct: globalAvgUptimePct,
       taskCounts: taskCounts,
       pendingReviewCount: taskCounts['Under Review'],

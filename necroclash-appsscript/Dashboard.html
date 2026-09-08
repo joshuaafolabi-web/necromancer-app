@@ -207,26 +207,33 @@
       }).getOverview();
     }
 
-    function statCard(label, value, color){
-      return '<div class="card" style="padding:16px"><div style="font-size:9.5px;font-weight:700;color:#8E8E93;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+esc(label)+'</div>'+
-        '<div class="mono" style="font-weight:800;font-size:22px;color:'+color+'">'+esc(value)+'</div></div>';
+    function statCard(label, value, color, icon){
+      return '<div class="card" style="padding:18px 18px 16px;position:relative;overflow:hidden">'+
+        '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:'+color+'"></div>'+
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:12px">'+
+        '<div style="font-size:9.5px;font-weight:700;color:#8E8E93;text-transform:uppercase;letter-spacing:.05em;line-height:1.4">'+esc(label)+'</div>'+
+        '<div style="width:28px;height:28px;flex:none;border-radius:9px;background:'+color+'19;display:flex;align-items:center;justify-content:center;font-size:14px">'+icon+'</div>'+
+        '</div>'+
+        '<div class="mono" style="font-weight:800;font-size:23px;color:'+color+'">'+esc(value)+'</div></div>';
     }
 
     function renderOverview(data){
       if (data && data.error) { $('tab-overview').innerHTML = '<div class="empty">'+esc(data.error)+'</div>'; return; }
 
       var uptimeColor = data.avgUptimePct == null ? '#8E8E93' : data.avgUptimePct >= 70 ? '#00A082' : data.avgUptimePct >= 40 ? '#B8860B' : '#DC2626';
+      var gmvText = '₦' + Math.round(data.totalGmv || 0).toLocaleString();
 
       var html = '';
-      html += '<div class="stat-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px">';
-      html += statCard('Accepted Partners', data.acceptedPartnerCount, '#1D1D1F');
-      html += statCard('Total Orders Delivered', data.totalOrdersDelivered.toLocaleString(), '#1D1D1F');
-      html += statCard('Avg. Uptime (Accepted)', data.avgUptimePct == null ? '—' : data.avgUptimePct + '%', uptimeColor);
+      html += '<div class="stat-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:14px">';
+      html += statCard('Accepted Partners', data.acceptedPartnerCount, '#1D1D1F', '🤝');
+      html += statCard('Total Orders Delivered', data.totalOrdersDelivered.toLocaleString(), '#1D1D1F', '📦');
+      html += statCard('Total GMV', gmvText, '#00A082', '₦');
+      html += statCard('Avg. Uptime (Accepted)', data.avgUptimePct == null ? '—' : data.avgUptimePct + '%', uptimeColor, '📶');
       html += '</div>';
-      html += '<div class="stat-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px">';
-      html += statCard('Awaiting Review', data.pendingReviewCount, '#6D28D9');
-      html += statCard('Overdue Tasks', data.overdueCount, data.overdueCount ? '#DC2626' : '#1D1D1F');
-      html += statCard('Avg. AM Turnaround', data.avgAmTurnaroundDays == null ? '—' : data.avgAmTurnaroundDays + 'd', '#00A082');
+      html += '<div class="stat-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:18px">';
+      html += statCard('Awaiting Review', data.pendingReviewCount, '#6D28D9', '🔍');
+      html += statCard('Overdue Tasks', data.overdueCount, data.overdueCount ? '#DC2626' : '#1D1D1F', '⏰');
+      html += statCard('Avg. AM Turnaround', data.avgAmTurnaroundDays == null ? '—' : data.avgAmTurnaroundDays + 'd', '#00A082', '⚡');
       html += '</div>';
 
       if (!data.tasksTabExists) {
