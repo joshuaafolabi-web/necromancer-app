@@ -941,6 +941,13 @@ function getTasks() {
   try {
     var ss = getSpreadsheet_();
     var rows = readTab_(ss, TASKS_SHEET);
+    // Logged so a real dashboard call (not just a manual test run) is
+    // visible in the Apps Script Executions panel — the client reported
+    // 0 tasks while a manual preflightLazarusLeague() run found 3 in the
+    // same script moments earlier, and there was no way to tell whether
+    // the live web app call was hitting a different row count, an
+    // exception, or something else without this.
+    Logger.log('getTasks: sheet="' + ss.getName() + '", found ' + rows.length + ' row(s) in "' + TASKS_SHEET + '"');
     var today = new Date();
     return rows.map(function (t) {
       var due = t.due_date ? new Date(t.due_date) : null;
@@ -967,6 +974,7 @@ function getTasks() {
       };
     });
   } catch (err) {
+    Logger.log('getTasks: threw — ' + (err && err.message ? err.message : err));
     return { error: String(err && err.message ? err.message : err) };
   }
 }
