@@ -708,6 +708,7 @@ function notifyTaskEvent_(task, kind) {
   var lines = [
     'Task: ' + task.task_type,
     'Partner SAID: ' + (task.partner_said || '—'),
+    'Store: ' + (task.store_name || '—'),
     'Description: ' + (task.description || '—'),
     'Due: ' + (task.due_date || '—'),
   ];
@@ -724,7 +725,7 @@ function notifyTaskEvent_(task, kind) {
 
   var slackLines = [
     ':clipboard: *Task ' + verb + '* — ' + amEmail,
-    '*' + task.task_type + '*' + (task.partner_said ? ' · partner ' + task.partner_said : ''),
+    '*' + task.task_type + '*' + (task.store_name ? ' · ' + task.store_name : '') + (task.partner_said ? ' (' + task.partner_said + ')' : ''),
   ];
   if (task.description) slackLines.push(task.description);
   slackLines.push('Due: ' + (task.due_date || '—'));
@@ -821,11 +822,21 @@ function assignTask(payload) {
     var amKnown = getAmList().some(function (a) { return a.am_email === amEmail; });
     if (!amKnown) return { error: 'That email is not in the AMs tab.' };
 
+    // Looked up once here (rather than trusting whatever the client's SAID
+    // preview last showed) so store_name in the Sheet and the notification
+    // always reflects the actual Partners row, not a stale client guess.
+    var storeName = '';
+    if (partnerSaid) {
+      var partnerMatch = getPartnerBySaid(partnerSaid);
+      if (partnerMatch && !partnerMatch.error) storeName = partnerMatch.storeName || '';
+    }
+
     var taskId = generateTaskId_();
     var now = new Date();
     var row = {
       task_id: taskId,
       partner_said: partnerSaid,
+      store_name: storeName,
       am_email: amEmail,
       task_type: taskType,
       description: description,
@@ -938,6 +949,7 @@ function getTasks() {
       return {
         taskId: t.task_id,
         partnerSaid: t.partner_said ? normalizeSaid_(t.partner_said) : '',
+        storeName: t.store_name || '',
         amEmail: normalizeEmail_(t.am_email),
         taskType: t.task_type,
         description: t.description,
@@ -957,6 +969,38 @@ function getTasks() {
   } catch (err) {
     return { error: String(err && err.message ? err.message : err) };
   }
+}
+
+/**
+ * One-time utility for tasks created before store_name was added to the
+ * Tasks tab — backfills it from the Partners tab via partner_said. Run
+ * manually from the Apps Script editor (Run > backfillTaskStoreNames);
+ * safe to re-run since it only touches rows that have a SAID but no
+ * store_name yet.
+ */
+function backfillTaskStoreNames() {
+  var sheet = getTab_(TASKS_SHEET);
+  var data = sheet.getDataRange().getValues();
+  if (data.length < 2) return 'No task rows.';
+  var headers = data[0].map(normalizeHeader_);
+  var saidCol = headers.indexOf('partner_said');
+  var storeCol = headers.indexOf('store_name');
+  if (saidCol < 0) return 'Tasks tab has no "partner_said" column.';
+  if (storeCol < 0) return 'Tasks tab has no "store_name" column — add one first.';
+
+  var updated = 0;
+  for (var i = 1; i < data.length; i++) {
+    var said = data[i][saidCol];
+    var existingStore = data[i][storeCol];
+    if (!said || String(existingStore || '').trim() !== '') continue;
+    var match = getPartnerBySaid(said);
+    if (match && !match.error && match.storeName) {
+      sheet.getRange(i + 1, storeCol + 1).setValue(match.storeName);
+      updated++;
+    }
+  }
+  Logger.log('Backfilled store_name for ' + updated + ' task(s).');
+  return 'Backfilled store_name for ' + updated + ' task(s).';
 }
 
 function getTaskHistory(taskId) {

@@ -289,7 +289,7 @@
         html += '<div class="mono" style="font-size:10.5px;font-weight:600;color:#DC2626;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">Overdue Right Now</div>';
         data.overdueTasks.forEach(function(t,i){
           html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;'+(i>0?'border-top:1px solid #F5F5F7':'')+'">'+
-            '<div><div style="font-size:12.5px;font-weight:700">'+esc(t.taskType)+(t.partnerSaid?' · '+esc(t.partnerSaid):'')+'</div>'+
+            '<div><div style="font-size:12.5px;font-weight:700">'+esc(t.taskType)+(t.storeName?' · '+esc(t.storeName):(t.partnerSaid?' · '+esc(t.partnerSaid):''))+'</div>'+
             '<div style="font-size:11px;color:#8E8E93">'+esc(t.amEmail)+' · due '+fmtDate(t.dueDate)+'</div></div>'+
             '<span class="badge" style="background:#FEF2F2;color:#DC2626">Overdue</span></div>';
         });
@@ -319,7 +319,11 @@
         }
         rosterData = data || [];
         if (!firstLoad) { renderRosterTable(); return; }
-        rosterAmFilter = currentEmail || '';
+        // A reviewer defaults to seeing everyone, not silently pre-filtered
+        // to whichever AM happens to be selected in the header (which can
+        // be an arbitrary AM if the reviewer isn't themselves in the AMs
+        // tab) — that previously made a fully-populated roster look empty.
+        rosterAmFilter = viewerIsReviewer ? '' : (currentEmail || '');
         renderRosterShell();
       }).withFailureHandler(function(err){
         if (firstLoad) $('tab-roster').innerHTML = '<div class="empty">Couldn’t load the roster.<br>'+esc(err && err.message ? err.message : err)+'</div>';
@@ -327,7 +331,7 @@
     }
 
     function renderRosterShell(){
-      var amOptions = '<option value="">All Account Managers</option>' + amList.map(function(a){
+      var amOptions = '<option value=""'+(rosterAmFilter?'':' selected')+'>All Account Managers</option>' + amList.map(function(a){
         return '<option value="'+esc(a.am_email)+'"'+(a.am_email===rosterAmFilter?' selected':'')+'>'+esc(a.am_name)+'</option>';
       }).join('');
       var html = '<div class="card" style="padding:16px 20px;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">'+
@@ -405,7 +409,12 @@
         }
         tasksData = data || [];
         if (!firstLoad) { renderTasksTable(); return; }
-        taskAmFilter = currentEmail || '';
+        // Same reasoning as the roster default: a reviewer should see every
+        // AM's tasks by default, not get silently pre-filtered to whichever
+        // AM happens to be selected in the header — that's how a Tasks tab
+        // with real Assigned rows in it rendered as "No tasks match this
+        // filter" even though the dropdown read "All Account Managers".
+        taskAmFilter = viewerIsReviewer ? '' : (currentEmail || '');
         if (viewerIsReviewer) {
           google.script.run.withSuccessHandler(function(t){ taskTemplates = t || []; renderTasksShell(); }).getTaskTemplates();
         } else {
@@ -429,7 +438,7 @@
           '<div id="assignForm" hidden style="margin-top:14px">'+assignFormHtml()+'</div></div>';
       }
 
-      var amOptions = '<option value="">All Account Managers</option>' + amList.map(function(a){
+      var amOptions = '<option value=""'+(taskAmFilter?'':' selected')+'>All Account Managers</option>' + amList.map(function(a){
         return '<option value="'+esc(a.am_email)+'"'+(a.am_email===taskAmFilter?' selected':'')+'>'+esc(a.am_name)+'</option>';
       }).join('');
       html += '<div class="card" style="padding:16px 20px;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">'+
@@ -551,8 +560,11 @@
         if (canReview) actions += ' <button class="btn btn-dark" style="padding:5px 10px;font-size:11px" onclick="openReviewModal(\''+esc(t.taskId)+'\',\'approve\')">Approve</button>'+
           ' <button class="btn btn-red" style="padding:5px 10px;font-size:11px" onclick="openReviewModal(\''+esc(t.taskId)+'\',\'reopen\')">Reopen</button>';
 
+        var partnerCell = t.storeName
+          ? '<div style="font-weight:600">'+esc(t.storeName)+'</div><div class="mono" style="font-size:10px;color:#B0B0B5">'+esc(t.partnerSaid)+'</div>'
+          : (t.partnerSaid ? '<span class="mono">'+esc(t.partnerSaid)+'</span>' : '—');
         html += '<tr class="'+(t.overdue?'overdue-row':'')+'"><td><div style="font-weight:700">'+esc(t.taskType)+'</div><div class="mono" style="font-size:10px;color:#B0B0B5">'+esc(t.taskId)+'</div></td>'+
-          '<td class="mono">'+(t.partnerSaid?esc(t.partnerSaid):'—')+'</td>'+
+          '<td>'+partnerCell+'</td>'+
           '<td>'+esc(t.amEmail)+'</td>'+
           '<td><span class="badge" style="background:'+(STATUS_BG[t.status]||'#F0F0F2')+';color:'+(STATUS_COLOR[t.status]||'#5A5A63')+'">'+esc(t.status)+'</span>'+
           (t.reopenCount ? ' <span style="font-size:10px;color:#8E8E93">↺'+t.reopenCount+'</span>' : '')+'</td>'+
