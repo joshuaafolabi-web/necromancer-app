@@ -1020,6 +1020,31 @@ function getPartnerRoster() {
   }
 }
 
+/**
+ * Looks up a single partner by SAID for the Assign Task form's live "store
+ * name" preview — deliberately not limited to accepted partners the way
+ * getPartnerRoster() is, since a task can reasonably be assigned about a
+ * partner before they've accepted the challenge. Returns null (not an
+ * error) for "not found", since that's an expected state while typing.
+ */
+function getPartnerBySaid(said) {
+  try {
+    var target = normalizeSaid_(said);
+    if (!target) return null;
+    var ss = getSpreadsheet_();
+    var partners = readTab_(ss, 'Partners');
+    for (var i = 0; i < partners.length; i++) {
+      var p = partners[i];
+      if (normalizeSaid_(p.said || p.store_address_id) === target) {
+        return { said: target, storeName: p.store_name || '', tier: p.tier || '' };
+      }
+    }
+    return null;
+  } catch (err) {
+    return { error: String(err && err.message ? err.message : err) };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Overview — project status, AM expectations, aging/SLA metrics. The thing
 // that makes this tab worth opening rather than decorative: overdue count,

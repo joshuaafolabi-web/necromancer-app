@@ -152,8 +152,12 @@
         $('tab-'+t).hidden = (t !== name);
         $('navbtn-'+t).className = 'navbtn' + (t === name ? ' active' : '');
       });
-      if (name === 'roster' && !tabLoaded.roster) loadRoster();
-      if (name === 'tasks' && !tabLoaded.tasks) loadTasks();
+      // Always fetch on entering a tab, not just the first time — each
+      // loader only rebuilds its filter shell / form on the very first
+      // call, so re-visiting a tab is a cheap data refresh, not a reset.
+      if (name === 'overview') loadOverview();
+      if (name === 'roster') loadRoster();
+      if (name === 'tasks') loadTasks();
     }
 
     // ---- Auto-refresh (Leaderboard tab; the others refresh when opened) --
@@ -302,15 +306,23 @@
     var rosterAmFilter = '';
     var rosterSearch = '';
 
+    // Same first-load-vs-refresh split as loadTasks() — re-fetches every
+    // re-open and on the auto-refresh timer, but only rebuilds the filter
+    // shell once so a chosen AM/search filter survives a background refresh.
     function loadRoster(){
+      var firstLoad = !tabLoaded.roster;
       tabLoaded.roster = true;
       google.script.run.withSuccessHandler(function(data){
-        if (data && data.error) { $('tab-roster').innerHTML = '<div class="empty">'+esc(data.error)+'</div>'; return; }
+        if (data && data.error) {
+          if (firstLoad) $('tab-roster').innerHTML = '<div class="empty">'+esc(data.error)+'</div>';
+          return;
+        }
         rosterData = data || [];
+        if (!firstLoad) { renderRosterTable(); return; }
         rosterAmFilter = currentEmail || '';
         renderRosterShell();
       }).withFailureHandler(function(err){
-        $('tab-roster').innerHTML = '<div class="empty">Couldn’t load the roster.<br>'+esc(err && err.message ? err.message : err)+'</div>';
+        if (firstLoad) $('tab-roster').innerHTML = '<div class="empty">Couldn’t load the roster.<br>'+esc(err && err.message ? err.message : err)+'</div>';
       }).getPartnerRoster();
     }
 
@@ -370,15 +382,29 @@
     var taskOverdueOnly = false;
     var expandedTaskId = null;
 
+    /**
+     * Called on first opening the Tasks tab, on every later re-open, AND on
+     * the periodic auto-refresh timer — a task assigned or reviewed from
+     * elsewhere (another browser tab, another reviewer) used to sit
+     * unseen here until a hard page reload, since this tab loaded once
+     * and never fetched again. Only the FIRST load rebuilds the whole
+     * shell (filters, the Assign form); every later call just refreshes
+     * tasksData and re-renders the table, so an in-progress Assign form or
+     * a chosen filter isn't wiped out from under the reviewer mid-use.
+     */
     function loadTasks(){
+      var firstLoad = !tabLoaded.tasks;
       tabLoaded.tasks = true;
       google.script.run.withSuccessHandler(function(data){
         if (data && data.error) {
-          $('tab-tasks').innerHTML = '<div class="empty">'+esc(data.error)+
-            '<br><br>If this says the Tasks tab wasn\'t found, add it — see the TASK MANAGEMENT comment at the top of Code.gs for exact headers.</div>';
-          return;
+          if (firstLoad) {
+            $('tab-tasks').innerHTML = '<div class="empty">'+esc(data.error)+
+              '<br><br>If this says the Tasks tab wasn\'t found, add it — see the TASK MANAGEMENT comment at the top of Code.gs for exact headers.</div>';
+          }
+          return; // on a refresh, keep whatever was last showing
         }
         tasksData = data || [];
+        if (!firstLoad) { renderTasksTable(); return; }
         taskAmFilter = currentEmail || '';
         if (viewerIsReviewer) {
           google.script.run.withSuccessHandler(function(t){ taskTemplates = t || []; renderTasksShell(); }).getTaskTemplates();
@@ -386,7 +412,9 @@
           renderTasksShell();
         }
       }).withFailureHandler(function(err){
-        $('tab-tasks').innerHTML = '<div class="empty">Couldn’t load Tasks.<br>'+esc(err && err.message ? err.message : err)+'</div>';
+        if (firstLoad) {
+          $('tab-tasks').innerHTML = '<div class="empty">Couldn’t load Tasks.<br>'+esc(err && err.message ? err.message : err)+'</div>';
+        }
       }).getTasks();
     }
 
@@ -423,7 +451,7 @@
         '<div><div style="font-size:11px;font-weight:600;color:#8E8E93;margin-bottom:4px">Template</div><select id="af_template" style="width:100%" onchange="applyTaskTemplate(this.value)">'+tmplOptions+'</select></div>'+
         '</div>'+
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'+
-        '<div><div style="font-size:11px;font-weight:600;color:#8E8E93;margin-bottom:4px">Partner SAID (optional)</div><input type="text" id="af_said" placeholder="6-digit SAID" style="width:100%" maxlength="6"></div>'+
+        '<div><div style="font-size:11px;font-weight:600;color:#8E8E93;margin-bottom:4px">Partner SAID (optional)</div><input type="text" id="af_said" placeholder="6-digit SAID" style="width:100%" maxlength="6" oninput="onSaidInput(this.value)"><div id="af_saidPreview" style="font-size:11px;margin-top:4px;min-height:14px"></div></div>'+
         '<div><div style="font-size:11px;font-weight:600;color:#8E8E93;margin-bottom:4px">Due date</div><input type="date" id="af_due" style="width:100%"></div>'+
         '</div>'+
         '<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:600;color:#8E8E93;margin-bottom:4px">Description</div><textarea id="af_desc"></textarea></div>'+
@@ -447,6 +475,34 @@
       $('af_due').value = due.toISOString().slice(0,10);
     }
 
+    // Confirms the reviewer typed the SAID they meant to — a wrong digit
+    // silently assigns a task about the wrong store, and there was no way
+    // to tell until an AM asked why they'd been pinged about someone
+    // else's account. Debounced so it doesn't fire a lookup per keystroke.
+    var saidLookupTimer = null;
+    function onSaidInput(v){
+      var preview = $('af_saidPreview');
+      clearTimeout(saidLookupTimer);
+      var digits = v.replace(/\D/g, '');
+      if (!digits) { preview.textContent = ''; return; }
+      preview.textContent = 'Looking up…';
+      preview.style.color = '#8E8E93';
+      saidLookupTimer = setTimeout(function(){
+        google.script.run.withSuccessHandler(function(p){
+          if (!$('af_saidPreview')) return; // form may have closed while this was in flight
+          if (!p || p.error) {
+            $('af_saidPreview').textContent = 'No partner found with this SAID.';
+            $('af_saidPreview').style.color = '#DC2626';
+            return;
+          }
+          $('af_saidPreview').textContent = '✓ ' + (p.storeName || '(no store name on file)');
+          $('af_saidPreview').style.color = '#00A082';
+        }).withFailureHandler(function(){
+          if ($('af_saidPreview')) $('af_saidPreview').textContent = '';
+        }).getPartnerBySaid(v);
+      }, 350);
+    }
+
     function submitAssignTask(){
       var payload = {
         amEmail: $('af_am').value,
@@ -459,7 +515,7 @@
       google.script.run.withSuccessHandler(function(res){
         if (res && res.error) { $('assignError').textContent = res.error; return; }
         toggleAssignForm();
-        $('af_said').value = ''; $('af_desc').value = '';
+        $('af_said').value = ''; $('af_desc').value = ''; $('af_saidPreview').textContent = '';
         loadTasksSilently();
       }).withFailureHandler(function(err){
         $('assignError').textContent = err && err.message ? err.message : String(err);
@@ -467,11 +523,7 @@
     }
 
     function loadTasksSilently(){
-      google.script.run.withSuccessHandler(function(data){
-        if (data && data.error) return;
-        tasksData = data || [];
-        renderTasksTable();
-      }).getTasks();
+      loadTasks(); // tabLoaded.tasks is already true here, so this just refreshes the table
       if (tabLoaded.overview) loadOverview();
     }
 
@@ -737,8 +789,20 @@
     }
 
     $('amSelect').addEventListener('change', function(){ loadFor(this.value); });
+    // Only the Leaderboard tab used to auto-refresh on this timer — Overview,
+    // Partner List and Tasks each loaded once and then sat stale until a
+    // hard page reload, so a task assigned or reviewed elsewhere (another
+    // browser tab, another reviewer) went unseen here. Now every tab that's
+    // been opened at least once keeps itself current on the same cadence.
+    function refreshLoadedTabs(){
+      silentRefresh(); // Leaderboard
+      if (tabLoaded.overview) loadOverview();
+      if (tabLoaded.roster) loadRoster();
+      if (tabLoaded.tasks) loadTasks();
+    }
+
     init();
-    setInterval(silentRefresh, REFRESH_MS);
+    setInterval(refreshLoadedTabs, REFRESH_MS);
   </script>
 </body>
 </html>
