@@ -546,7 +546,14 @@
       $('taskCount').textContent = rows.length + ' of ' + tasksData.length + ' task(s)';
 
       if (!rows.length) {
-        $('tasksTableWrap').innerHTML = '<div class="card"><div class="empty">No tasks match this filter.</div></div>';
+        // Distinguish "0 total tasks came back from the Sheet" (a real
+        // problem — the Tasks tab, a header, or the deployment itself)
+        // from "some tasks exist but your filter hides them all", which
+        // otherwise render as the exact same unhelpful blank message.
+        var msg = tasksData.length === 0
+          ? 'The Tasks tab returned zero rows. If you have task rows in the Sheet, run <span class="mono">preflightLazarusLeague()</span> from the Apps Script editor (View > Logs afterward) — it reports the Tasks tab\'s row count and will point at the actual cause.'
+          : 'No tasks match this filter.';
+        $('tasksTableWrap').innerHTML = '<div class="card"><div class="empty">'+msg+'</div></div>';
         return;
       }
 
