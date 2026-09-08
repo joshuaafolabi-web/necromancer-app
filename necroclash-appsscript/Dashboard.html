@@ -204,9 +204,22 @@
     // =======================================================================
     // OVERVIEW TAB
     // =======================================================================
+    // Clicking a tab now fires a fresh fetch every time (see showTab()),
+    // and the 2-minute auto-refresh timer can also fire one — two
+    // overlapping calls for the same tab can resolve out of order (Apps
+    // Script latency varies call to call), and whichever callback runs
+    // LAST used to win even if it was the stale one. overviewRequestId
+    // tags each call as it's fired so an out-of-order response can be
+    // told "you're not the latest request anymore" and ignored.
+    var overviewRequestId = 0;
     function loadOverview(){
       tabLoaded.overview = true;
-      google.script.run.withSuccessHandler(renderOverview).withFailureHandler(function(err){
+      var myRequestId = ++overviewRequestId;
+      google.script.run.withSuccessHandler(function(data){
+        if (myRequestId !== overviewRequestId) return; // superseded by a newer request
+        renderOverview(data);
+      }).withFailureHandler(function(err){
+        if (myRequestId !== overviewRequestId) return;
         $('tab-overview').innerHTML = '<div class="empty">Couldn’t load Overview.<br>'+esc(err && err.message ? err.message : err)+'</div>';
       }).getOverview();
     }
@@ -309,10 +322,15 @@
     // Same first-load-vs-refresh split as loadTasks() — re-fetches every
     // re-open and on the auto-refresh timer, but only rebuilds the filter
     // shell once so a chosen AM/search filter survives a background refresh.
+    // rosterRequestId guards against an overlapping call's stale response
+    // (see the comment on overviewRequestId above) winning the render.
+    var rosterRequestId = 0;
     function loadRoster(){
       var firstLoad = !tabLoaded.roster;
       tabLoaded.roster = true;
+      var myRequestId = ++rosterRequestId;
       google.script.run.withSuccessHandler(function(data){
+        if (myRequestId !== rosterRequestId) return; // superseded by a newer request
         if (data && data.error) {
           if (firstLoad) $('tab-roster').innerHTML = '<div class="empty">'+esc(data.error)+'</div>';
           return;
@@ -326,6 +344,7 @@
         rosterAmFilter = viewerIsReviewer ? '' : (currentEmail || '');
         renderRosterShell();
       }).withFailureHandler(function(err){
+        if (myRequestId !== rosterRequestId) return;
         if (firstLoad) $('tab-roster').innerHTML = '<div class="empty">Couldn’t load the roster.<br>'+esc(err && err.message ? err.message : err)+'</div>';
       }).getPartnerRoster();
     }
@@ -395,11 +414,23 @@
      * shell (filters, the Assign form); every later call just refreshes
      * tasksData and re-renders the table, so an in-progress Assign form or
      * a chosen filter isn't wiped out from under the reviewer mid-use.
+     *
+     * tasksRequestId guards against a second, overlapping call to
+     * loadTasks() (a re-click landing while the auto-refresh timer's call
+     * is still in flight, say) resolving out of order — Apps Script call
+     * latency varies enough that the OLDER request's response can arrive
+     * LAST and overwrite a newer, correct render with stale (or, if the
+     * older call raced a Sheet write, transiently empty) data. Only the
+     * response whose id still matches the latest-fired request is used;
+     * anything else is a superseded response and is silently dropped.
      */
+    var tasksRequestId = 0;
     function loadTasks(){
       var firstLoad = !tabLoaded.tasks;
       tabLoaded.tasks = true;
+      var myRequestId = ++tasksRequestId;
       google.script.run.withSuccessHandler(function(data){
+        if (myRequestId !== tasksRequestId) return; // superseded by a newer request
         if (data && data.error) {
           if (firstLoad) {
             $('tab-tasks').innerHTML = '<div class="empty">'+esc(data.error)+
@@ -416,11 +447,16 @@
         // filter" even though the dropdown read "All Account Managers".
         taskAmFilter = viewerIsReviewer ? '' : (currentEmail || '');
         if (viewerIsReviewer) {
-          google.script.run.withSuccessHandler(function(t){ taskTemplates = t || []; renderTasksShell(); }).getTaskTemplates();
+          google.script.run.withSuccessHandler(function(t){
+            if (myRequestId !== tasksRequestId) return;
+            taskTemplates = t || [];
+            renderTasksShell();
+          }).getTaskTemplates();
         } else {
           renderTasksShell();
         }
       }).withFailureHandler(function(err){
+        if (myRequestId !== tasksRequestId) return;
         if (firstLoad) {
           $('tab-tasks').innerHTML = '<div class="empty">Couldn’t load Tasks.<br>'+esc(err && err.message ? err.message : err)+'</div>';
         }
