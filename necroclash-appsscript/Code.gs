@@ -210,6 +210,20 @@ function normalizeSaid_(v) {
   return digits;
 }
 /**
+ * Number(v) returns NaN the moment a Sheet cell has a comma thousands
+ * separator or a currency symbol in it (e.g. "1,417,500" or "₦1,417,500"
+ * typed in by hand rather than entered as a plain number) — and NaN || 0
+ * silently becomes 0, which is how totalGmv came out far too low. This
+ * strips everything but digits, a leading minus, and a decimal point
+ * before parsing, so formatted-looking currency/order values still count.
+ */
+function numericCell_(v) {
+  if (v === undefined || v === null || String(v).trim() === '') return 0;
+  var cleaned = String(v).replace(/[^0-9.\-]/g, '');
+  var num = Number(cleaned);
+  return isNaN(num) ? 0 : num;
+}
+/**
  * Reads a partner's campaign uptime without assuming the Sheet's uptime
  * column is spelled exactly "uptime_campaign" — this project has already
  * been bitten twice by a column being renamed or spelled slightly
@@ -1029,8 +1043,8 @@ function getOverview() {
     // Partners tab, not just the subset who've additionally opted into the
     // AM gamification challenge. A dormant partner contributes 0 either
     // way, so summing over everyone is both correct and harmless.
-    var totalOrdersDelivered = partners.reduce(function (s, p) { return s + (Number(p.orders_delivered) || 0); }, 0);
-    var totalGmv = partners.reduce(function (s, p) { return s + (Number(p.total_order_value) || 0); }, 0);
+    var totalOrdersDelivered = partners.reduce(function (s, p) { return s + numericCell_(p.orders_delivered); }, 0);
+    var totalGmv = partners.reduce(function (s, p) { return s + numericCell_(p.total_order_value); }, 0);
     // Uptime stays scoped to accepted partners only, same reasoning as
     // everywhere else in this file: a store that hasn't started its
     // 30-day window yet has no campaign uptime to speak of, so folding it

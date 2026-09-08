@@ -221,7 +221,7 @@
       if (data && data.error) { $('tab-overview').innerHTML = '<div class="empty">'+esc(data.error)+'</div>'; return; }
 
       var uptimeColor = data.avgUptimePct == null ? '#8E8E93' : data.avgUptimePct >= 70 ? '#00A082' : data.avgUptimePct >= 40 ? '#B8860B' : '#DC2626';
-      var gmvText = '₦' + Math.round(data.totalGmv || 0).toLocaleString();
+      var gmvText = '₦ ' + ((data.totalGmv || 0) / 1000000).toFixed(2) + ' Mn';
 
       var html = '';
       html += '<div class="stat-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:14px">';
