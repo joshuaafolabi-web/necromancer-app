@@ -212,16 +212,28 @@ function normalizeSaid_(v) {
 /**
  * Number(v) returns NaN the moment a Sheet cell has a comma thousands
  * separator or a currency symbol in it (e.g. "1,417,500" or "₦1,417,500"
- * typed in by hand rather than entered as a plain number) — and NaN || 0
- * silently becomes 0, which is how totalGmv came out far too low. This
- * strips everything but digits, a leading minus, and a decimal point
- * before parsing, so formatted-looking currency/order values still count.
+ * typed in by hand), and NaN || 0 silently becomes 0 — undercounting.
+ *
+ * The fix is NOT "strip every non-digit character and parse what's left":
+ * across ~1,000 partner rows (most of them dormant and not carefully
+ * curated), any stray non-numeric cell — a Date typed in by mistake, a
+ * placeholder dash, a formula error — has its digits and its month/day/
+ * year/timezone-offset numbers all concatenated into one enormous bogus
+ * value instead of being safely ignored, which is how the sum briefly hit
+ * the quadrillions. Native Sheets numbers (typeof 'number', the normal
+ * case even for currency-formatted cells) pass straight through; a string
+ * is only accepted if, after removing a leading currency symbol and comma
+ * separators, it's unambiguously a plain decimal number. Anything else —
+ * dates included — is treated as 0, the same as a blank cell.
  */
 function numericCell_(v) {
-  if (v === undefined || v === null || String(v).trim() === '') return 0;
-  var cleaned = String(v).replace(/[^0-9.\-]/g, '');
-  var num = Number(cleaned);
-  return isNaN(num) ? 0 : num;
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  if (v === undefined || v === null) return 0;
+  var s = String(v).trim();
+  if (s === '') return 0;
+  var cleaned = s.replace(/^[₦$€£\s]+/, '').replace(/,/g, '').trim();
+  if (!/^-?\d+(\.\d+)?$/.test(cleaned)) return 0;
+  return Number(cleaned);
 }
 /**
  * Reads a partner's campaign uptime without assuming the Sheet's uptime
