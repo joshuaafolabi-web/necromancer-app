@@ -430,6 +430,7 @@
       tabLoaded.tasks = true;
       var myRequestId = ++tasksRequestId;
       google.script.run.withSuccessHandler(function(data){
+        console.log('[LazarusLeague] getTasks raw response:', JSON.stringify(data), 'isArray:', Array.isArray(data));
         if (myRequestId !== tasksRequestId) return; // superseded by a newer request
         if (data && data.error) {
           if (firstLoad) {
