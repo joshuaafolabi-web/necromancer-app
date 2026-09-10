@@ -210,6 +210,21 @@ function normalizeSaid_(v) {
   return digits;
 }
 /**
+ * google.script.run can silently fail to deliver a return value across
+ * the client/server boundary when it contains a raw Date object nested
+ * inside a returned array/object — the client's success handler still
+ * fires, but with `null` instead of the real payload, and nothing throws
+ * on either side to say why. Sheet cells for a date/datetime column come
+ * back from getValues() as real JS Date objects, and getTasks()/
+ * getOverview()/getPartnerRoster()/getTaskHistory() all return those
+ * straight through — this converts one to a plain ISO string first, which
+ * is unambiguously serializable, so the client always gets real data.
+ */
+function safeDate_(v) {
+  if (v instanceof Date) return isNaN(v.getTime()) ? '' : v.toISOString();
+  return v || '';
+}
+/**
  * Number(v) returns NaN the moment a Sheet cell has a comma thousands
  * separator or a currency symbol in it (e.g. "1,417,500" or "₦1,417,500"
  * typed in by hand), and NaN || 0 silently becomes 0 — undercounting.
@@ -961,14 +976,14 @@ function getTasks() {
         taskType: t.task_type,
         description: t.description,
         assignedBy: t.assigned_by,
-        assignedDate: t.assigned_date,
-        dueDate: t.due_date,
+        assignedDate: safeDate_(t.assigned_date),
+        dueDate: safeDate_(t.due_date),
         status: t.status,
-        completedDate: t.completed_date,
+        completedDate: safeDate_(t.completed_date),
         amComment: t.am_comment,
         reviewerComment: t.reviewer_comment,
         reviewedBy: t.reviewed_by,
-        reviewedDate: t.reviewed_date,
+        reviewedDate: safeDate_(t.reviewed_date),
         reopenCount: Number(t.reopen_count) || 0,
         overdue: overdue,
       };
@@ -1025,6 +1040,7 @@ function getTaskHistory(taskId) {
       .map(function (r) {
         var obj = {};
         headers.forEach(function (h, i) { obj[h] = r[i]; });
+        obj.at = safeDate_(obj.at); // raw Date would otherwise silently break google.script.run — see safeDate_'s comment
         return obj;
       })
       .sort(function (a, b) { return new Date(a.at) - new Date(b.at); });
@@ -1063,7 +1079,7 @@ function getPartnerRoster() {
           tierDisplay: SEGMENT_DISPLAY[normalizeSegment_(p.tier)] || p.tier || '—',
           ordersDelivered: Number(p.orders_delivered) || 0,
           uptime: uptime,
-          acceptedAt: p.challenge_accepted_at,
+          acceptedAt: safeDate_(p.challenge_accepted_at),
         };
       })
       .sort(function (a, b) { return b.ordersDelivered - a.ordersDelivered; });
